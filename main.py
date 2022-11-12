@@ -1,18 +1,6 @@
 import numpy as np
 import pandas as pd
-
-
-def split_data(data):
-    # get the first 10 trial as train data and the remaining two for valid and test
-    train_data = data[np.logical_and(data.trialid != 11, data.trialid != 12)]
-    valid_data = data[data.trialid == 11]
-    test_data = data[data.trialid == 12]
-
-    print(train_data.head(), end="\n\n")
-    print(valid_data.head(), end="\n\n")
-    print(test_data.head(), end="\n\n")
-
-    return train_data, valid_data, test_data
+from sklearn.model_selection import train_test_split
 
 
 def create_senteces_from_data(data):
@@ -30,21 +18,23 @@ def create_senteces_from_data(data):
 def load_data(filename=None):
     data = pd.read_csv(filename, index_col=0)
 
-    print(data.head())
+    print(data.head(), end="\n\n")
 
-    # splid data in train, valid, test
-    train_data, valid_data, test_data = split_data(data)
+    sentences, targets = create_senteces_from_data(data)
 
-    # transform datasets into a sentences targets sequences
-    train_sentences, train_targets = create_senteces_from_data(train_data)
-    valid_sentences, valid_targets = create_senteces_from_data(valid_data)
-    test_sentences, test_targets = create_senteces_from_data(test_data)
+    # split in train, valid, test
+    train_sentences, test_sentences, train_targets, test_targets = train_test_split(sentences, targets, shuffle=False, test_size=0.10)
+    train_sentences, valid_sentences, valid_targets, valid_targets = train_test_split(train_sentences, train_targets, shuffle=False, test_size=0.15)
+
+    print(f"Train elements : {len(train_sentences)}", end="\n\n")
+    print(f"Valid elements : {len(valid_sentences)}", end="\n\n")
+    print(f"Test elements : {len(test_sentences)}", end="\n\n")
 
     return train_sentences, valid_sentences, test_sentences, train_targets, valid_targets, test_targets
 
 
 def main():
-    train_sentences, valid_sentences, test_sentences, train_targets, valid_targets, test_targets = load_data("cleaned_data.csv")
+    train_sentences, valid_sentences, test_sentences, train_targets, valid_targets, test_targets = load_data("datasets/cluster_0_dataset.csv")
 
 
 if __name__ == "__main__":

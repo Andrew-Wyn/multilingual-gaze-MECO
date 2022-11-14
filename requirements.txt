@@ -4,3 +4,7 @@ scikit-learn
 matplotlib
 scipy
 tqdm
+keras
+transformers
+torch
+tensorflow

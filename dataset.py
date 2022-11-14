@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.utils import pad_sequences
 from utils import LOGGER
 
 
@@ -64,7 +65,7 @@ class GazeDataset():
         for mode in self.modes:
             ids = [self.tokenizer.prepare_for_model(self.tokenizer.convert_tokens_to_ids(s))["input_ids"]
                    for s in self.text_inputs[mode]]
-            # self.text_inputs[mode] = pad_sequences(ids, value=self.tokenizer.pad_token_id, padding="post")
+            self.text_inputs[mode] = pad_sequences(ids, value=self.tokenizer.pad_token_id, padding="post")
 
     def calc_attn_masks(self):
         """
@@ -81,11 +82,11 @@ class GazeDataset():
         self.target_pad = -1
 
         self.standardize()
-        #self.tokenize_from_words()
-        #self.pad_targets()
-        #self.calc_input_ids()
-        #self.calc_attn_masks()
-        #self.calc_numpy()
+        self.tokenize_from_words()
+        self.pad_targets()
+        self.calc_input_ids()
+        self.calc_attn_masks()
+        self.calc_numpy()
 
     def _create_senteces_from_data(self, data):
         word_func = lambda s: [w for w in s["ia"].values.tolist()]
@@ -176,7 +177,7 @@ class GazeDataset():
             target_pad_vector = np.full((1, self.d_out), self.target_pad)
             targets = [np.concatenate((target_pad_vector, i, target_pad_vector)) for i in targets]
 
-            # self.targets[mode] = pad_sequences(targets, value=self.target_pad, padding="post")
+            self.targets[mode] = pad_sequences(targets, value=self.target_pad, padding="post")
 
     def calc_numpy(self):
         LOGGER.info(f"Calculating numpy arrays for task {self.task}")

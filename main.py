@@ -1,7 +1,8 @@
 from dataset import GazeDataset
 from dataloader import GazeDataLoader
 from trainer import GazeTrainer
-from utils import LOGGER, create_finetuning_optimizer, create_scheduler, randomize_model
+from utils import LOGGER, create_finetuning_optimizer, create_scheduler, randomize_model, Config
+import torch
 from transformers import (
     # AutoConfig,
     AutoModelForTokenClassification,
@@ -23,12 +24,14 @@ import os
 CACHE_DIR = f"{os.getcwd()}/.hf_cache/"
 # change Transformer cache variable
 os.environ['TRANSFORMERS_CACHE'] = CACHE_DIR
-
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def main():
 
-    model = "prajjwal1/bert-mini"
+    model = "distilbert-base-uncased"
     random_weights=False
+
+    cf = Config.load_json("config_try.json")
 
     # Tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model, cache_dir=CACHE_DIR)
@@ -37,8 +40,8 @@ def main():
     d = GazeDataset(10, tokenizer, "datasets/cluster_0_dataset.csv", "try")
     d.read_pipeline()
 
-    train_dl = GazeDataLoader(256, 256, d.numpy["train"], d.target_pad, mode="train")
-    val_dl = GazeDataLoader(256, 256, d.numpy["valid"], d.target_pad, mode="val") 
+    train_dl = GazeDataLoader(cf, d.numpy["train"], d.target_pad, mode="train")
+    val_dl = GazeDataLoader(c, d.numpy["valid"], d.target_pad, mode="val") 
 
     # Model
     LOGGER.info("initiating model: ")
@@ -51,14 +54,14 @@ def main():
         #print(model.classifier.weight.data)
 
     # optimizer
-    optim = create_finetuning_optimizer(True, 0.001, 0.001, 0.001, model):
+    optim = create_finetuning_optimizer(cf, model)
 
     # scheduler
-    scheduler = create_scheduler(1, optim, train_dl)
+    scheduler = create_scheduler(cf, optim, train_dl)
 
     # trainer
-    trainer = GazeTrainer(n_epocs, max_grad_norm, patience, model, train_dl, val_dl, optim, scheduler,
-                                  "cpu", monitor="loss_all", monitor_mode="min")
+    trainer = GazeTrainer(cf, model, train_dl, val_dl, optim, scheduler, "eval_dir", "task",
+                                  DEVICE, monitor="loss_all", monitor_mode="min")
     trainer.train()
     LOGGER.info(f"Training completed task")
 

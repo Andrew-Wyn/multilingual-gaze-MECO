@@ -1,6 +1,8 @@
 from transformers import AdamW, get_linear_schedule_with_warmup
 import torch
 import logging.config
+import json
+
 
 CONFIG = {
     "version": 1,
@@ -25,20 +27,32 @@ CONFIG = {
     }
 }
 
+
 logging.config.dictConfig(CONFIG)
 LOGGER = logging.getLogger("processing")
 
-def create_finetuning_optimizer(full_finetuning, weight_decay, lr, eps, model):
+
+class Config:
+    @classmethod
+    def load_json(cls, fpath):
+        cf = cls()
+        with open(fpath) as f:
+            cf.__dict__ = json.load(f)
+
+        return cf
+
+
+def create_finetuning_optimizer(cf, model):
     """
     Creates an Adam optimizer with weight decay. We can choose whether to perform full finetuning on
     all parameters of the model or to just optimize the parameters of the final classification layer.
     """
-    if full_finetuning:
+    if cf.full_finetuning:
         param_optimizer = list(model.named_parameters())
         no_decay = ["bias"]
         optimizer_grouped_parameters = [
             {"params": [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
-             "weight_decay_rate": weight_decay},
+             "weight_decay_rate": cf.weight_decay},
             {"params": [p for n, p in param_optimizer if any(nd in n for nd in no_decay)],
              "weight_decay_rate": 0}
         ]
@@ -46,14 +60,14 @@ def create_finetuning_optimizer(full_finetuning, weight_decay, lr, eps, model):
         param_optimizer = list(model.classifier.named_parameters())
         optimizer_grouped_parameters = [{"params": [p for n, p in param_optimizer]}]
 
-    return AdamW(optimizer_grouped_parameters, lr=lr, eps=eps)
+    return AdamW(optimizer_grouped_parameters, lr=cf.lr, eps=cf.eps)
 
 
-def create_scheduler(n_epochs, optim, dl):
+def create_scheduler(cf, optim, dl):
     """
     Creates a linear learning rate scheduler.
     """
-    n_iters = n_epochs * len(dl)
+    n_iters = cf.n_epochs * len(dl)
     return get_linear_schedule_with_warmup(optim, num_warmup_steps=0, num_training_steps=n_iters)
 
 

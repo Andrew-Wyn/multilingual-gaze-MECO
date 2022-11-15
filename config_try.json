@@ -1,6 +1,6 @@
 {
     "feature_max": 100,
-    "model_pretrained": "",
+    "model_pretrained": "distilbert-base-uncased",
     "finetune_on_gaze": true,
     "full_finetuning": true,
     "weight_decay": 1e-2,
@@ -9,6 +9,7 @@
     "max_grad_norm": 1.0,
     "train_bs": 16,
     "eval_bs": 16,
-    "n_epochs": 100,
-    "patience": 7
+    "n_epochs": 1,
+    "patience": 7,
+    "random_weights": false
   }

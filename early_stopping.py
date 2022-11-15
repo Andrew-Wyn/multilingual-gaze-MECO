@@ -2,10 +2,12 @@ import os
 from abc import ABC
 from utils import LOGGER
 from tester import GazeTester
-
+import torch
 
 class EarlyStopping(ABC):
     def __init__(self, cf, model, dir, monitor, monitor_mode, tester):
+        self.cf = cf
+        self.save_counter = 0
         self.model = model
         self.dir = dir
         self.patience = cf.patience
@@ -36,7 +38,8 @@ class EarlyStopping(ABC):
             self.best_score = score
 
             LOGGER.info("Metric has improved, saving the model")
-            # torch.save(self.model.state_dict(), os.path.join(self.dir, "model-"+cf.model_pretrained+"-"+str(cf.full_finetuning)+"-"+str(RANDOM_STATE)+".pth"))
+            torch.save(self.model.state_dict(), os.path.join(self.dir, "model-"+self.cf.model_pretrained+"-"+str(self.cf.full_finetuning)+"-"+str(self.save_counter)+".pth"))
+            self.save_counter += 1
 
             self.run_patience = 0
         else:

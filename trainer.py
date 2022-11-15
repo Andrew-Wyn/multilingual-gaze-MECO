@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
-import tqdm
+from tqdm import tqdm
 import os
 
 from abc import ABC, abstractmethod
 
-from utils import GazeEarlyStopping
+from early_stopping import GazeEarlyStopping
 from utils import mask_mse_loss
 from utils import LOGGER
 
@@ -48,7 +48,7 @@ class Trainer(ABC):
                 it += 1
 
                 loss = self.train_one_step(batch)
-                self.writer.add_scalar("train/loss", loss, it)
+                # self.writer.add_scalar("train/loss", loss, it)
                 epoch_loss_ls.append(loss)
 
             epoch_loss_avg = sum(epoch_loss_ls) / len(epoch_loss_ls)
@@ -58,8 +58,8 @@ class Trainer(ABC):
 
             self.early_stop()
 
-            for key, metric in self.early_stop.tester.metrics.items():
-                self.writer.add_scalar(f"val/{key}", metric, it // n_batches_one_epoch)
+            # for key, metric in self.early_stop.tester.metrics.items():
+            #    self.writer.add_scalar(f"val/{key}", metric, it // n_batches_one_epoch)
 
             if self.early_stop.stop:
                 break
@@ -88,7 +88,7 @@ class GazeTrainer(Trainer):
 
         b_output = self.model(input_ids=b_input, attention_mask=b_mask)[0]
 
-        active_outputs, active_targets = mask_mse_loss(b_output, b_target, self.target_pad, self.model.d_out)
+        active_outputs, active_targets = mask_mse_loss(b_output, b_target, self.target_pad, self.model.num_labels)
         loss = self.criterion(active_outputs, active_targets)
 
         loss.backward()

@@ -28,10 +28,12 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def main():
 
-    model = "distilbert-base-uncased"
-    random_weights=False
-
     cf = Config.load_json("config_try.json")
+
+    print(cf)
+
+    model = cf.model_pretrained
+    random_weights = cf.random_weights
 
     # Tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model, cache_dir=CACHE_DIR)
@@ -41,12 +43,13 @@ def main():
     d.read_pipeline()
 
     train_dl = GazeDataLoader(cf, d.numpy["train"], d.target_pad, mode="train")
-    val_dl = GazeDataLoader(c, d.numpy["valid"], d.target_pad, mode="val") 
+    val_dl = GazeDataLoader(cf, d.numpy["valid"], d.target_pad, mode="val") 
 
     # Model
     LOGGER.info("initiating model: ")
     model = AutoModelForTokenClassification.from_pretrained(model, num_labels=d.d_out,
                                     output_attentions=False, output_hidden_states=False)
+
     if random_weights is True:
         # initiate Bert with random weights
         print("randomizing weights")

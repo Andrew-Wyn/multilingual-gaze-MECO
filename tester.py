@@ -5,8 +5,7 @@ import torch
 import torch.nn as nn
 from tqdm.auto import tqdm
 
-from model import GazePredictionLoss
-from utils import mask_mse_loss, LOGGER
+from utils import mask_mse_loss, LOGGER, GazePredictionLoss
 import os
 from abc import ABC, abstractmethod
 
@@ -80,7 +79,7 @@ class GazeTester(Tester):
         self.target_pad = dl.target_pad
 
         self.criterion = nn.MSELoss(reduction="mean")
-        self.criterion_metric = GazePredictionLoss(model.d_out)
+        self.criterion_metric = GazePredictionLoss(model.num_labels)
 
     def predict(self):
         self.model.to(self.device)
@@ -99,7 +98,7 @@ class GazeTester(Tester):
 
                 b_output = self.model(input_ids=b_input, attention_mask=b_mask)[0]
 
-                active_outputs, active_targets = mask_mse_loss(b_output, b_target, self.target_pad, self.model.d_out)
+                active_outputs, active_targets = mask_mse_loss(b_output, b_target, self.target_pad, self.model.num_labels)
                 loss += self.criterion(active_outputs, active_targets)
 
                 b_output_orig_len = []

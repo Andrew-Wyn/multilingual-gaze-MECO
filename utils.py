@@ -104,7 +104,7 @@ class GazePredictionLoss:
         self.d_gaze = d_gaze
         self.d_report = d_gaze + 1
 
-        self.loss = nn.L1Loss(reduction="sum")
+        self.loss = torch.nn.L1Loss(reduction="sum")
 
     def __call__(self, b_output, b_target):
         b_length = [len(i) for i in b_output]

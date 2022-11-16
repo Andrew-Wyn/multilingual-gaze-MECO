@@ -5,7 +5,7 @@ from gaze.tester import GazeTester
 import torch
 
 class EarlyStopping(ABC):
-    def __init__(self, cf, model, dir, monitor, monitor_mode, tester):
+    def __init__(self, cf, model, dir, monitor, monitor_mode, tester, writer):
         self.cf = cf
         self.save_counter = 0
         self.model = model
@@ -14,6 +14,7 @@ class EarlyStopping(ABC):
         self.monitor = monitor
         self.monitor_mode = monitor_mode
         self.tester = tester
+        self.writer = writer
 
         self.run_patience = 0
         self.best_score = None
@@ -32,8 +33,8 @@ class EarlyStopping(ABC):
 
         if self.best_score is None or (self.monitor_mode == "min" and score < self.best_score) or \
                 (self.monitor_mode == "max" and score > self.best_score):
-            #for key, value in self.tester.metrics.items():
-                # mlflow.log_metric(f"val_{key}", value)
+            for key, value in self.tester.metrics.items():
+                self.writer.add_scalar(f"best_score/val/{key}", value, self.save_counter)
 
             self.best_score = score
 
@@ -48,6 +49,6 @@ class EarlyStopping(ABC):
 
 
 class GazeEarlyStopping(EarlyStopping):
-    def __init__(self, cf, model, val_dataloader, dir, device, task, monitor, monitor_mode):
+    def __init__(self, cf, model, val_dataloader, dir, device, task, monitor, monitor_mode, writer):
         tester = GazeTester(model, val_dataloader, device, task)
-        super().__init__(cf, model, dir, monitor, monitor_mode, tester)
+        super().__init__(cf, model, dir, monitor, monitor_mode, tester, writer)

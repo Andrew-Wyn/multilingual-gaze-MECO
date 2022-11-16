@@ -7,7 +7,7 @@ from gaze.utils import LOGGER, mask_mse_loss
 
 
 class Trainer(ABC):
-    def __init__(self, cf, model, train_dl, eval_dir, early_stop, task, device):
+    def __init__(self, cf, model, train_dl, eval_dir, early_stop, task, device, writer):
         self.model = model
         self.train_dl = train_dl
         self.eval_dir = eval_dir
@@ -15,11 +15,7 @@ class Trainer(ABC):
         self.n_epochs = cf.n_epochs
         self.task = task
         self.device = device
-
-        # if not os.path.exists(eval_dir):
-        #    os.makedirs(eval_dir)
-
-        # self.writer = SummaryWriter(self.eval_dir)
+        self.writer = writer
 
     @abstractmethod
     def train_one_step(self, batch):
@@ -28,7 +24,6 @@ class Trainer(ABC):
     def train(self):
         n_batches_one_epoch = len(self.train_dl)
         n_params = sum(p.numel() for p in self.model.parameters())
-        # mlflow.log_metric("n_params", n_params)
         LOGGER.info(f"Num epochs: {self.n_epochs}")
         LOGGER.info(f"Num parameters: {n_params}")
         LOGGER.info(f"Begin training task {self.task}")
@@ -44,7 +39,7 @@ class Trainer(ABC):
                 it += 1
 
                 loss = self.train_one_step(batch)
-                # self.writer.add_scalar("train/loss", loss, it)
+                self.writer.add_scalar("train/loss", loss, it)
                 epoch_loss_ls.append(loss)
 
             epoch_loss_avg = sum(epoch_loss_ls) / len(epoch_loss_ls)
@@ -54,8 +49,8 @@ class Trainer(ABC):
 
             self.early_stop()
 
-            # for key, metric in self.early_stop.tester.metrics.items():
-            #    self.writer.add_scalar(f"val/{key}", metric, it // n_batches_one_epoch)
+            for key, metric in self.early_stop.tester.metrics.items():
+               self.writer.add_scalar(f"val/{key}", metric, it // n_batches_one_epoch)
 
             if self.early_stop.stop:
                 break
@@ -63,9 +58,9 @@ class Trainer(ABC):
 
 class GazeTrainer(Trainer):
     def __init__(self, cf, model, train_dl, val_dl, optim, scheduler, eval_dir,
-                 task, device, monitor, monitor_mode):
-        early_stop = GazeEarlyStopping(cf, model, val_dl, eval_dir, device, task, monitor, monitor_mode)
-        super().__init__(cf, model, train_dl, eval_dir, early_stop, task, device)
+                 task, device, monitor, monitor_mode, writer):
+        early_stop = GazeEarlyStopping(cf, model, val_dl, eval_dir, device, task, monitor, monitor_mode, writer)
+        super().__init__(cf, model, train_dl, eval_dir, early_stop, task, device, writer)
 
         self.optim = optim
         self.scheduler = scheduler

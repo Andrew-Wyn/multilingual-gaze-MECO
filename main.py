@@ -17,6 +17,7 @@ from transformers import (
     # set_seed,
 )
 import os
+from torch.utils.tensorboard import SummaryWriter
 
 
 # TODO: capire perche se non setto cache_dir in AutoTokenizer
@@ -30,7 +31,15 @@ def main():
 
     cf = Config.load_json("config_try.json")
 
+    eval_dir = "eval_dir"
+
     print(cf)
+
+    if not os.path.exists(eval_dir):
+        os.makedirs(eval_dir)
+
+    writer = SummaryWriter(eval_dir)
+
 
     model = cf.model_pretrained
     random_weights = cf.random_weights
@@ -63,8 +72,8 @@ def main():
     scheduler = create_scheduler(cf, optim, train_dl)
 
     # trainer
-    trainer = GazeTrainer(cf, model, train_dl, val_dl, optim, scheduler, "eval_dir", "task",
-                                  DEVICE, monitor="loss_all", monitor_mode="min")
+    trainer = GazeTrainer(cf, model, train_dl, val_dl, optim, scheduler, eval_dir, "task",
+                                  DEVICE, monitor="loss_all", monitor_mode="min", writer=writer)
     trainer.train()
     LOGGER.info(f"Training completed task")
 

@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.utils import pad_sequences
-from utils import LOGGER
+from gaze.utils import LOGGER
 
 
 class GazeDataset():

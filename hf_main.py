@@ -3,7 +3,7 @@ import torch
 import numpy as np
 
 from torch.nn import BCEWithLogitsLoss
-from dataset import GazeDataset
+from gaze.dataset import GazeDataset
 from datasets import Dataset
 
 

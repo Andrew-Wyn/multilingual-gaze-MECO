@@ -5,8 +5,7 @@ import torch
 import torch.nn as nn
 from tqdm.auto import tqdm
 
-from utils import mask_mse_loss, LOGGER, GazePredictionLoss
-import os
+from gaze.utils import mask_mse_loss, LOGGER, GazePredictionLoss
 from abc import ABC, abstractmethod
 
 class Tester(ABC):

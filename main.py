@@ -1,7 +1,7 @@
-from dataset import GazeDataset
-from dataloader import GazeDataLoader
-from trainer import GazeTrainer
-from utils import LOGGER, create_finetuning_optimizer, create_scheduler, randomize_model, Config
+from gaze.dataset import GazeDataset
+from gaze.dataloader import GazeDataLoader
+from gaze.trainer import GazeTrainer
+from gaze.utils import LOGGER, create_finetuning_optimizer, create_scheduler, randomize_model, Config
 import torch
 from transformers import (
     # AutoConfig,

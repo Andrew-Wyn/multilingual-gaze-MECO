@@ -1,7 +1,7 @@
 import os
 from abc import ABC
-from utils import LOGGER
-from tester import GazeTester
+from gaze.utils import LOGGER
+from gaze.tester import GazeTester
 import torch
 
 class EarlyStopping(ABC):

@@ -1,13 +1,9 @@
 import torch
 import torch.nn as nn
 from tqdm import tqdm
-import os
-
 from abc import ABC, abstractmethod
-
-from early_stopping import GazeEarlyStopping
-from utils import mask_mse_loss
-from utils import LOGGER
+from gaze.early_stopping import GazeEarlyStopping
+from gaze.utils import LOGGER, mask_mse_loss
 
 
 class Trainer(ABC):

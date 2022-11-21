@@ -18,6 +18,7 @@ from transformers import (
 )
 import os
 from torch.utils.tensorboard import SummaryWriter
+import argparse
 
 
 # TODO: capire perche se non setto cache_dir in AutoTokenizer
@@ -28,8 +29,29 @@ os.environ['TRANSFORMERS_CACHE'] = CACHE_DIR
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def main():
+    parser = argparse.ArgumentParser(description='Fine-tune a XLM-Roberta-base following config json passed')
+    parser.add_argument('-c' ,'--config', dest='config_file', action='store',
+                        help=f'Relative path of a .json file, that contain parameters for the fine-tune script \
+                            {{ \
+                                "feature_max": int, \
+                                "model_pretrained": str, \
+                                "finetune_on_gaze": boolean, \
+                                "full_finetuning": boolean, \
+                                "weight_decay": float, \
+                                "lr": float, \
+                                "eps": float, \
+                                "max_grad_norm": float, \
+                                "train_bs": int, \
+                                "eval_bs": int, \
+                                "n_epochs": int, \
+                                "patience": int, \
+                                "random_weights": boolean \
+                            }}')
 
-    cf = Config.load_json("config_try.json")
+    args = parser.parse_args()
+    config_file = args.config_file
+
+    cf = Config.load_json(config_file)
 
     eval_dir = "eval_dir"
 

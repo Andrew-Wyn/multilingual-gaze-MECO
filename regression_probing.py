@@ -1,5 +1,8 @@
 import argparse
 import os
+from collections import defaultdict
+from tqdm import tqdm
+
 
 import numpy as np
 
@@ -41,28 +44,27 @@ def create_probing_dataset(cf, tokenizer, model, mean=False):
 
     print(model.config.num_hidden_layers)
 
-    for input, target, mask in d.numpy["train"][1:]:
+    probing_dataset["train"] = defaultdict(list)
+
+    for input, target, mask in tqdm(d.numpy["test"]):
         # print(input)
-        print(target.shape)
-        print(mask.shape)
+        # print(target.shape)
+        # print(mask.shape)
 
         # remove the tokens with -1 in the target
 
         with torch.no_grad():
-            output = model(input_ids=torch.as_tensor([input]), attention_mask=torch.as_tensor([mask]))
+            model_output = model(input_ids=torch.as_tensor([input]), attention_mask=torch.as_tensor([mask]))
         
         for layer in range(model.config.num_hidden_layers):
 
-            hidden_state = output.hidden_states[layer].numpy()
+            hidden_state = model_output.hidden_states[layer].numpy()
 
             non_masked_els = np.multiply.reduce(target != -1, 1) > 0
-
-            print(non_masked_els)
 
             if not mean:
                 # take only the first subword embedding for a given word
                 input = hidden_state[0, non_masked_els, :]
-                print(input.shape)
             else:
                 # take the mean of the subwords's embedding for a given word
                 # id of the words's start
@@ -70,11 +72,28 @@ def create_probing_dataset(cf, tokenizer, model, mean=False):
                 input.append(hidden_state[0, np.where(non_masked_els)[0][-1], :])
                 input = np.array(input)
 
-                print(input.shape)
 
             output = target[non_masked_els, :]
 
-            print(output.shape)
+            probing_dataset["train"][layer].append((input, output))
+        
+    # concatenate the inputs and outputs
+    for layer in range(model.config.num_hidden_layers):
+        input_list = []
+        output_list = []
+        
+        for input, output in probing_dataset["train"][layer]:
+            input_list.append(input)
+            output_list.append(output)
+
+        input_list = np.array(input_list)
+        output_list = np.array(output_list)
+
+        probing_dataset["train"][layer] = (input_list, output_list)
+        
+
+    print(probing_dataset["train"][1][0].shape)
+    
 
             
 

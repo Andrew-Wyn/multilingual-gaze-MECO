@@ -39,7 +39,9 @@ class EarlyStopping(ABC):
             self.best_score = score
 
             LOGGER.info("Metric has improved, saving the model")
-            torch.save(self.model.state_dict(), os.path.join(self.dir, "model-"+self.cf.model_pretrained+"-"+str(self.cf.full_finetuning)+"-"+str(self.save_counter)+".pth"))
+            # torch.save(self.model.state_dict(), os.path.join(self.dir, "model-"+self.cf.model_pretrained+"-"+str(self.cf.full_finetuning)+"-"+str(self.save_counter)+".pth"))
+            # need to save with this utility to load in a second step
+            self.model.save_pretrained(os.path.join(self.dir, "model-"+self.cf.model_pretrained+"-"+str(self.cf.full_finetuning)+"-"+str(self.save_counter)))
             self.save_counter += 1
 
             self.run_patience = 0

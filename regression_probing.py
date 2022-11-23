@@ -3,6 +3,9 @@ import os
 from collections import defaultdict
 from tqdm import tqdm
 
+from sklearn.multioutput import MultiOutputRegressor
+from sklearn.svm import SVR
+from sklearn.metrics import r2_score
 
 import numpy as np
 
@@ -32,8 +35,9 @@ os.environ['TRANSFORMERS_CACHE'] = CACHE_DIR
 
 
 def create_probing_dataset(cf, tokenizer, model, mean=False):
-    # one entry per layer each of them is a 
     probing_dataset = dict()
+
+    modes = ["test"]
 
     # Dataset
     d = GazeDataset(cf, tokenizer, "datasets/cluster_0_dataset.csv", "try")
@@ -44,60 +48,73 @@ def create_probing_dataset(cf, tokenizer, model, mean=False):
 
     print(model.config.num_hidden_layers)
 
-    probing_dataset["train"] = defaultdict(list)
+    for mode in modes:
+        probing_dataset[mode] = defaultdict(list)
 
-    for input, target, mask in tqdm(d.numpy["test"]):
-        # print(input)
-        # print(target.shape)
-        # print(mask.shape)
+        for input, target, mask in tqdm(d.numpy[mode]):
+            # print(input)
+            # print(target.shape)
+            # print(mask.shape)
 
-        # remove the tokens with -1 in the target
+            # remove the tokens with -1 in the target
 
-        with torch.no_grad():
-            model_output = model(input_ids=torch.as_tensor([input]), attention_mask=torch.as_tensor([mask]))
-        
-        for layer in range(model.config.num_hidden_layers):
-
-            hidden_state = model_output.hidden_states[layer].numpy()
-
-            non_masked_els = np.multiply.reduce(target != -1, 1) > 0
-
-            if not mean:
-                # take only the first subword embedding for a given word
-                input = hidden_state[0, non_masked_els, :]
-            else:
-                # take the mean of the subwords's embedding for a given word
-                # id of the words's start
-                input = [np.mean(split_, 0) for split_ in np.split(hidden_state[0], np.where(non_masked_els)[0], 0)[1:-1]]
-                input.append(hidden_state[0, np.where(non_masked_els)[0][-1], :])
-                input = np.array(input)
-
-
-            output = target[non_masked_els, :]
-
-            probing_dataset["train"][layer].append((input, output))
-        
-    # concatenate the inputs and outputs
-    for layer in range(model.config.num_hidden_layers):
-        input_list = []
-        output_list = []
-        
-        for input, output in probing_dataset["train"][layer]:
-            input_list.append(input)
-            output_list.append(output)
-
-        input_list = np.array(input_list)
-        output_list = np.array(output_list)
-
-        probing_dataset["train"][layer] = (input_list, output_list)
-        
-
-    print(probing_dataset["train"][1][0].shape)
-    
-
+            with torch.no_grad():
+                model_output = model(input_ids=torch.as_tensor([input]), attention_mask=torch.as_tensor([mask]))
             
+            for layer in range(model.config.num_hidden_layers):
 
-        
+                hidden_state = model_output.hidden_states[layer].numpy()
+
+                non_masked_els = np.multiply.reduce(target != -1, 1) > 0
+
+                if not mean:
+                    # take only the first subword embedding for a given word
+                    input = hidden_state[0, non_masked_els, :]
+                else:
+                    # take the mean of the subwords's embedding for a given word
+                    # id of the words's start
+                    input = [np.mean(split_, 0) for split_ in np.split(hidden_state[0], np.where(non_masked_els)[0], 0)[1:-1]]
+                    input.append(hidden_state[0, np.where(non_masked_els)[0][-1], :])
+                    input = np.array(input)
+
+
+                output = target[non_masked_els, :]
+
+                probing_dataset[mode][layer].append((input, output))
+            
+        # concatenate the inputs and outputs !!!!
+        for layer in range(model.config.num_hidden_layers):
+            input_list = []
+            output_list = []
+            
+            for input, output in probing_dataset[mode][layer]:
+                input_list.append(input)
+                output_list.append(output)
+
+            input_list = np.concatenate(input_list, axis=0)
+            output_list = np.concatenate(output_list, axis=0)
+
+            probing_dataset[mode][layer] = (input_list, output_list)
+
+    # transform dataset
+    return_probing_dataset = dict()
+
+    for layer in range(model.config.num_hidden_layers):
+        return_probing_dataset[layer] = dict()
+
+        for mode in modes:
+            return_probing_dataset[layer][mode] = probing_dataset[mode][layer]
+    
+    return return_probing_dataset
+
+
+def linear_probe(probing_dataset):
+        for layer, datasets in probing_dataset.items():
+            print(f"---- {layer} ----")
+            input_list, output_list = datasets["test"]
+            regr = MultiOutputRegressor(SVR()).fit(input_list, output_list)
+            predicted = regr.predict(input_list)
+            print(r2_score(predicted, output_list))
 
 
 def load_model_from_hf(model_name, pretrained, d_out=8):
@@ -167,7 +184,8 @@ def main():
         model = AutoModelForTokenClassification.from_pretrained(model_dir, output_attentions=False, output_hidden_states=True)
 
     
-    _ = create_probing_dataset(cf, tokenizer, model)
+    probing_dataset = create_probing_dataset(cf, tokenizer, model)
+    linear_probe(probing_dataset)
 
 if __name__ == "__main__":
     main()

@@ -2,8 +2,11 @@ import argparse
 import os
 from collections import defaultdict
 from tqdm import tqdm
+import datetime
+import json
 
 from sklearn.multioutput import MultiOutputRegressor
+from sklearn.neural_network import MLPRegressor
 from sklearn.svm import SVR
 from sklearn.metrics import r2_score
 
@@ -35,9 +38,10 @@ os.environ['TRANSFORMERS_CACHE'] = CACHE_DIR
 
 
 def create_probing_dataset(cf, tokenizer, model, mean=False):
+    LOGGER.info(f"Creating datasets, Mean = {mean} ...")
     probing_dataset = dict()
 
-    modes = ["test"]
+    modes = ["train", "valid", "test"]
 
     # Dataset
     d = GazeDataset(cf, tokenizer, "datasets/cluster_0_dataset.csv", "try")
@@ -49,6 +53,9 @@ def create_probing_dataset(cf, tokenizer, model, mean=False):
     print(model.config.num_hidden_layers)
 
     for mode in modes:
+
+        LOGGER.info(f"Start creating - {mode} - dataset...")
+
         probing_dataset[mode] = defaultdict(list)
 
         for input, target, mask in tqdm(d.numpy[mode]):
@@ -82,6 +89,8 @@ def create_probing_dataset(cf, tokenizer, model, mean=False):
 
                 probing_dataset[mode][layer].append((input, output))
             
+        LOGGER.info("Retrieving done, postprocess...")
+        
         # concatenate the inputs and outputs !!!!
         for layer in range(model.config.num_hidden_layers):
             input_list = []
@@ -96,6 +105,8 @@ def create_probing_dataset(cf, tokenizer, model, mean=False):
 
             probing_dataset[mode][layer] = (input_list, output_list)
 
+        LOGGER.info(f"{mode} done!")
+
     # transform dataset
     return_probing_dataset = dict()
 
@@ -108,13 +119,56 @@ def create_probing_dataset(cf, tokenizer, model, mean=False):
     return return_probing_dataset
 
 
-def linear_probe(probing_dataset):
-        for layer, datasets in probing_dataset.items():
-            print(f"---- {layer} ----")
-            input_list, output_list = datasets["test"]
-            regr = MultiOutputRegressor(SVR()).fit(input_list, output_list)
-            predicted = regr.predict(input_list)
-            print(r2_score(predicted, output_list))
+def apply_linear_model(datasets):
+    input_list_train, output_list_train = datasets["train"]
+    input_list_valid, output_list_valid = datasets["valid"]
+    input_list_test, output_list_test = datasets["test"]
+    regr = MultiOutputRegressor(SVR()).fit(input_list_train, output_list_train)
+    predicted_train = regr.predict(input_list_train)
+    predicted_valid = regr.predict(input_list_valid)
+    predicted_test = regr.predict(input_list_test)
+    return r2_score(predicted_train, output_list_train), r2_score(predicted_valid, output_list_valid), r2_score(predicted_test, output_list_test)
+
+
+def apply_nonlinear_model(datasets):
+    input_list_train, output_list_train = datasets["train"]
+    input_list_valid, output_list_valid = datasets["valid"]
+    input_list_test, output_list_test = datasets["test"]
+    regr = MLPRegressor().fit(input_list_train, output_list_train)
+    predicted_train = regr.predict(input_list_train)
+    predicted_valid = regr.predict(input_list_valid)
+    predicted_test = regr.predict(input_list_test)
+    return r2_score(predicted_train, output_list_train), r2_score(predicted_valid, output_list_valid), r2_score(predicted_test, output_list_test)
+
+
+
+def probe(probing_dataset, linear, output_dir):
+    LOGGER.info(f"Starting probe, Linear = {linear} ...")
+    metrics = dict()
+
+    metrics["linear"] = linear
+
+    for layer, datasets in probing_dataset.items():
+        LOGGER.info(f"---- {layer} ----")
+        if linear:
+            score_train, score_valid, score_test = apply_linear_model(datasets)
+        else:
+            score_train, score_valid, score_test = apply_nonlinear_model(datasets)
+
+        metrics[layer] = {
+            "score_train" : score_train,
+            "score_valid" : score_valid,
+            "score_test" : score_test
+        }
+
+        LOGGER.info("Scores:")
+        LOGGER.info(f"Train: {score_train}")
+        LOGGER.info(f"Valid: {score_valid}")
+        LOGGER.info(f"Test: {score_test}")
+        LOGGER.info(f"{layer} done!!!")
+
+    with open(f"{output_dir}/probe_results_{datetime.datetime.now().time()}.json", 'w') as f:
+        json.dump(metrics, f)
 
 
 def load_model_from_hf(model_name, pretrained, d_out=8):
@@ -138,6 +192,12 @@ def main():
                         help=f' of the model to retrieve from the HF repository')
     parser.add_argument('-d' ,'--model_dir', dest='model_dir', action='store',
                         help=f'Relative path of the pretrained model')
+    parser.add_argument('-o' ,'--output_dir', dest='output_dir', action='store',
+                    help=f'Relative path of the probing output')
+    parser.add_argument('-l' ,'--linear', dest='linear', action=argparse.BooleanOptionalAction,
+                    help=f'If apply linear model, default False')
+    parser.add_argument('-a' ,'--average', dest='average', action=argparse.BooleanOptionalAction,
+                    help=f'If apply average over the subtokens')
     parser.add_argument('-p' ,'--pretrained', dest='pretrained', action=argparse.BooleanOptionalAction,
                         help=f'If needed a pretrained model')
     parser.add_argument('-f' ,'--finetuned', dest='finetuned', action=argparse.BooleanOptionalAction,
@@ -146,18 +206,6 @@ def main():
                         help=f'Relative path of a .json file, that contain parameters for the fine-tune script \
                             {{ \
                                 "feature_max": int, \
-                                "model_pretrained": str, \
-                                "finetune_on_gaze": boolean, \
-                                "full_finetuning": boolean, \
-                                "weight_decay": float, \
-                                "lr": float, \
-                                "eps": float, \
-                                "max_grad_norm": float, \
-                                "train_bs": int, \
-                                "eval_bs": int, \
-                                "n_epochs": int, \
-                                "patience": int, \
-                                "random_weights": boolean \
                             }}')
 
 
@@ -167,7 +215,10 @@ def main():
     finetuned = args.finetuned
     model_name = args.model_name
     model_dir = args.model_dir
+    output_dir = args.output_dir
     config_file = args.config_file
+    linear = False if args.linear is None else True
+    average = False if args.average is None else True
 
     cf = Config.load_json(config_file)
 
@@ -176,16 +227,14 @@ def main():
 
     if not finetuned: # downaload from huggingface
         print("download from hf")
-
         model = load_model_from_hf(model_name, pretrained)
 
     else: # load from disk
         print("load from disk")
         model = AutoModelForTokenClassification.from_pretrained(model_dir, output_attentions=False, output_hidden_states=True)
-
     
-    probing_dataset = create_probing_dataset(cf, tokenizer, model)
-    linear_probe(probing_dataset)
+    probing_dataset = create_probing_dataset(cf, tokenizer, model, mean=average)
+    probe(probing_dataset, linear, output_dir)
 
 if __name__ == "__main__":
     main()

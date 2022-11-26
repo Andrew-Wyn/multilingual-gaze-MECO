@@ -44,7 +44,7 @@ def create_probing_dataset(cf, tokenizer, model, mean=False):
     modes = ["train", "valid", "test"]
 
     # Dataset
-    d = GazeDataset(cf, tokenizer, "datasets/cluster_0_dataset.csv", "try")
+    d = GazeDataset(cf, tokenizer, "datasets/all_mean_dataset.csv", "try")
     d.read_pipeline()
 
     # train_dl = GazeDataLoader(cf, d.numpy["train"], d.target_pad, mode="train")
@@ -60,8 +60,10 @@ def create_probing_dataset(cf, tokenizer, model, mean=False):
 
         for input, target, mask in tqdm(d.numpy[mode]):
             # print(input)
-            # print(target.shape)
-            # print(mask.shape)
+            # print(mask)
+            # print(np.multiply.reduce(target != -1, 1) > 0)
+
+            last_token_id = (len(mask) - 1 - mask.tolist()[::-1].index(1)) - 1
 
             # remove the tokens with -1 in the target
 
@@ -81,9 +83,11 @@ def create_probing_dataset(cf, tokenizer, model, mean=False):
                     # take the mean of the subwords's embedding for a given word
                     # id of the words's start
                     input = [np.mean(split_, 0) for split_ in np.split(hidden_state[0], np.where(non_masked_els)[0], 0)[1:-1]]
-                    input.append(hidden_state[0, np.where(non_masked_els)[0][-1], :])
-                    input = np.array(input)
+                    # the last have mean all the vector from the last non masked to the sep token (sep token is the last 1 in mask)
+                    last_mean = np.mean(hidden_state[0, np.where(non_masked_els)[0][-1] : last_token_id, :], 0)
+                    input.append(last_mean)
 
+                    input = np.array(input)
 
                 output = target[non_masked_els, :]
 

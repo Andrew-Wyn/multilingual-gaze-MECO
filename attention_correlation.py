@@ -1,19 +1,12 @@
 import argparse
 import os
-from collections import defaultdict
 from tqdm import tqdm
-import datetime
-import json
 
-from sklearn.multioutput import MultiOutputRegressor
-from sklearn.neural_network import MLPRegressor
-from sklearn.svm import SVR
-from sklearn.metrics import r2_score
+import scipy
 
 import numpy as np
 
 from gaze.dataset import GazeDataset
-from gaze.dataloader import GazeDataLoader
 from gaze.utils import LOGGER, randomize_model, Config
 import torch
 from transformers import (
@@ -52,7 +45,7 @@ def load_model_from_hf(model_name, pretrained, d_out=8):
     return model
 
 
-def compute_attention_correlation(cf, tokenizer, model):
+def compute_attention_correlation(cf, tokenizer, model, subwords=True):
     LOGGER.info(f"Computing Attention Correlation ...")
 
     modes = ["train", "valid", "test"]
@@ -61,29 +54,79 @@ def compute_attention_correlation(cf, tokenizer, model):
     d = GazeDataset(cf, tokenizer, "datasets/all_mean_dataset.csv", "try")
     d.read_pipeline()
 
-    # TODO: combine datasets
-    dataset = d.numpy["train"]
+    dataset = []
+
+    for mode in modes:
+        dataset += d.numpy[mode]
+    
+    attention_list_layers = dict()
+    target_list_layers = dict()
 
     print(model.config.num_hidden_layers)
 
-    for input, _, mask in tqdm(dataset):
+    for input, target, mask in tqdm(dataset):
         with torch.no_grad():
             model_output = model(input_ids=torch.as_tensor([input]), attention_mask=torch.as_tensor([mask]))
 
-        print(len(model_output.attentions))
-
         for attention_layer in model_output.attentions:
-            print(attention_layer[0].shape)
+            # We use the first element of the batch because batch size is 1
+            attention = attention_layer[0].numpy()
 
-            attention_layer_mean = torch.mean(attention_layer[0], 0)
+            non_padded_ids = np.where(mask == 1)[0]
 
-            masked_ids = np.where(mask == 1)[0]
+            # 1. We take the mean over the 12 attention heads (like Abnar & Zuidema 2020)
+            # I also tried the sum once, but the result was even worse
+            mean_attention = np.mean(attention, axis=0)
 
-            print(masked_ids)
+            print(mean_attention.shape)
 
-            reduced_attention_layer_mean = attention_layer_mean[masked_ids, masked_ids]
+            # We drop padded tokens
+            # mean_attention = mean_attention[non_padded_ids]
 
-            print(reduced_attention_layer_mean.shape)
+            # We drop CLS and SEP tokens
+            mean_attention = mean_attention[1:-1]
+
+            # 2. For each word, we sum over the attention to the other words to determine relative importance
+            sum_attention = np.sum(mean_attention, axis=0)
+
+            sum_attention = sum_attention[non_padded_ids]
+
+            print(sum_attention.shape)
+
+            first_token_ids = np.where(np.multiply.reduce(target[non_padded_ids] != -1, 1) > 0)[0]
+
+            # merge subwords 
+            if not subwords:
+                # take the attention of only the first token of a word
+                sum_attention = sum_attention[first_token_ids]
+            else:
+                # take the sum of the subwords's attention for a given word
+                # id of the words's start
+                attns = [np.sum(split_) for split_ in np.split(sum_attention, first_token_ids, 0)[1:-1]]
+                # the last have sum all the attention from the last non masked to the sep token (sep token is the last 1 in mask)
+                last_sum = np.sum(sum_attention[first_token_ids[-1] : non_padded_ids[-1]], 0)
+                attns.append(last_sum)
+
+                sum_attention = np.array(attns)
+
+            print(sum_attention.shape)
+
+            # Taking the softmax does not make a difference for calculating correlation
+            # It can be useful to scale the salience signal to the same range as the human attention
+            relative_attention = scipy.special.softmax(sum_attention)
+
+            print(relative_attention.shape)
+
+            word_targets = target[first_token_ids]
+
+            # normalize features between [0,1]
+
+            sum_features = np.sum(word_targets, axis=0)
+
+            normalized_features = word_targets / sum_features
+
+            for feat_i in range(normalized_features.shape[1]):
+                pass
 
             exit(0)
 

@@ -4,6 +4,8 @@ from tqdm import tqdm
 
 import scipy
 
+from scipy.stats import spearmanr
+
 import numpy as np
 
 from gaze.dataset import GazeDataset
@@ -45,8 +47,8 @@ def load_model_from_hf(model_name, pretrained, d_out=8):
     return model
 
 
-def compute_attention_correlation(cf, tokenizer, model, subwords=True):
-    LOGGER.info(f"Computing Attention Correlation ...")
+def create_attention_dataset(cf, tokenizer, model, subwords=False):
+    LOGGER.info(f"Creating Attention Dataset, subwords sum : {subwords}...")
 
     modes = ["train", "valid", "test"]
 
@@ -59,8 +61,8 @@ def compute_attention_correlation(cf, tokenizer, model, subwords=True):
     for mode in modes:
         dataset += d.numpy[mode]
     
-    attention_list_layers = dict()
-    target_list_layers = dict()
+    attention_list_layers = list()
+    target_list_layers = list()
 
     print(model.config.num_hidden_layers)
 
@@ -68,7 +70,10 @@ def compute_attention_correlation(cf, tokenizer, model, subwords=True):
         with torch.no_grad():
             model_output = model(input_ids=torch.as_tensor([input]), attention_mask=torch.as_tensor([mask]))
 
-        for attention_layer in model_output.attentions:
+        attention_dict = dict()
+        target_dict = dict()
+
+        for layer, attention_layer in enumerate(model_output.attentions):
             # We use the first element of the batch because batch size is 1
             attention = attention_layer[0].numpy()
 
@@ -77,8 +82,6 @@ def compute_attention_correlation(cf, tokenizer, model, subwords=True):
             # 1. We take the mean over the 12 attention heads (like Abnar & Zuidema 2020)
             # I also tried the sum once, but the result was even worse
             mean_attention = np.mean(attention, axis=0)
-
-            print(mean_attention.shape)
 
             # We drop padded tokens
             # mean_attention = mean_attention[non_padded_ids]
@@ -90,8 +93,6 @@ def compute_attention_correlation(cf, tokenizer, model, subwords=True):
             sum_attention = np.sum(mean_attention, axis=0)
 
             sum_attention = sum_attention[non_padded_ids]
-
-            print(sum_attention.shape)
 
             first_token_ids = np.where(np.multiply.reduce(target[non_padded_ids] != -1, 1) > 0)[0]
 
@@ -109,27 +110,67 @@ def compute_attention_correlation(cf, tokenizer, model, subwords=True):
 
                 sum_attention = np.array(attns)
 
-            print(sum_attention.shape)
-
             # Taking the softmax does not make a difference for calculating correlation
             # It can be useful to scale the salience signal to the same range as the human attention
             relative_attention = scipy.special.softmax(sum_attention)
 
-            print(relative_attention.shape)
+            attention_dict[layer] = relative_attention
 
             word_targets = target[first_token_ids]
 
             # normalize features between [0,1]
-
             sum_features = np.sum(word_targets, axis=0)
 
             normalized_features = word_targets / sum_features
 
+            # avoid division by 0 in the normalization of a full zero row
+            normalized_features[np.isnan(normalized_features)] = 0
+
+
+            target_dict[layer] = list()
+
             for feat_i in range(normalized_features.shape[1]):
-                pass
+                target_dict[layer].append(normalized_features[:, feat_i])
+                
 
-            exit(0)
+        attention_list_layers.append(attention_dict)
+        target_list_layers.append(target_dict)
 
+    # transform datasets, from list of dicts to dict of lists
+    return_dict_attns = dict()
+    return_dict_target = dict()
+    for layer in range(model.config.num_hidden_layers):
+        return_dict_attns[layer] = list()
+        return_dict_target[layer] = list()
+    
+    for attention_dict, target_dict in zip(attention_list_layers, target_list_layers):
+        for layer in range(model.config.num_hidden_layers):
+            return_dict_attns[layer].append(attention_dict[layer])
+            return_dict_target[layer].append(target_dict[layer])
+
+    return return_dict_attns, return_dict_target
+
+
+def compute_spearman_correlation(attns, targets):
+    spearman_correlations = list()
+
+    for attn, targ in zip(attns, targets):
+        spearman_correlations.append(spearmanr(attn, targ)[0])
+
+    return np.mean(spearman_correlations)
+
+
+def compute_correlations(dict_attns, dict_target, num_features=8, num_layers=6):
+    correlations = dict()
+
+    for feat in range(num_features):
+        correlations[feat] = dict()
+        for layer in range(num_layers):
+            layer_target_feature = [targets[feat] for targets in dict_target[layer]]
+            layer_attns = dict_attns[layer]
+            correlations[feat][layer] = compute_spearman_correlation(layer_attns, layer_target_feature)
+
+    return correlations
 
 def main():
     parser = argparse.ArgumentParser(description='Regression Probing')
@@ -178,7 +219,11 @@ def main():
         print("load from disk")
         model = AutoModelForTokenClassification.from_pretrained(model_dir, output_attentions=True, output_hidden_states=False)
 
-    compute_attention_correlation(cf, tokenizer, model)
+    dict_attns, dict_target = create_attention_dataset(cf, tokenizer, model)
+
+    correlations = compute_correlations(dict_attns, dict_target)
+
+    print(correlations)
 
 if __name__ == "__main__":
     main()

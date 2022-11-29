@@ -5,7 +5,7 @@ from gaze.utils import LOGGER, create_finetuning_optimizer, create_scheduler, ra
 import torch
 from transformers import (
     # AutoConfig,
-    AutoModelForTokenClassification,
+    # AutoModelForTokenClassification,
     AutoTokenizer,
     # DataCollatorWithPadding,
     # EvalPrediction,
@@ -16,6 +16,9 @@ from transformers import (
     # default_data_collator,
     # set_seed,
 )
+
+from modeling.custom_bert import BertForTokenClassification
+
 import os
 from torch.utils.tensorboard import SummaryWriter
 import argparse
@@ -78,7 +81,7 @@ def main():
 
     # Model
     LOGGER.info("initiating model: ")
-    model = AutoModelForTokenClassification.from_pretrained(model, num_labels=d.d_out,
+    model = BertForTokenClassification.from_pretrained(model, num_labels=d.d_out,
                                     output_attentions=False, output_hidden_states=False)
 
     if random_weights is True:

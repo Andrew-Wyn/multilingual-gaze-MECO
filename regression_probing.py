@@ -18,7 +18,7 @@ from gaze.utils import LOGGER, randomize_model, Config
 import torch
 from transformers import (
     # AutoConfig,
-    AutoModelForTokenClassification,
+    # AutoModelForTokenClassification,
     AutoTokenizer,
     # DataCollatorWithPadding,
     # EvalPrediction,
@@ -29,6 +29,8 @@ from transformers import (
     # default_data_collator,
     # set_seed,
 )
+
+from modeling.custom_bert import BertForTokenClassification
 
 # TODO: capire perche se non setto cache_dir in AutoTokenizer
 # non usa come cache la directory specificata
@@ -178,7 +180,7 @@ def probe(probing_dataset, linear, output_dir):
 def load_model_from_hf(model_name, pretrained, d_out=8):
     # Model
     LOGGER.info("initiating model:")
-    model = AutoModelForTokenClassification.from_pretrained(model_name, num_labels=d_out,
+    model = BertForTokenClassification.from_pretrained(model_name, num_labels=d_out,
                                     output_attentions=False, output_hidden_states=True)
 
     if not pretrained:
@@ -235,7 +237,7 @@ def main():
 
     else: # load from disk
         print("load from disk")
-        model = AutoModelForTokenClassification.from_pretrained(model_dir, output_attentions=False, output_hidden_states=True)
+        model = BertForTokenClassification.from_pretrained(model_dir, output_attentions=False, output_hidden_states=True)
     
     probing_dataset = create_probing_dataset(cf, tokenizer, model, mean=average)
     probe(probing_dataset, linear, output_dir)

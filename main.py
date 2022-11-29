@@ -70,7 +70,7 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(model, cache_dir=CACHE_DIR)
 
     # Dataset
-    d = GazeDataset(cf, tokenizer, "datasets/cluster_0_dataset.csv", "try")
+    d = GazeDataset(cf, tokenizer, "datasets/all_mean_dataset.csv", "try")
     d.read_pipeline()
 
     train_dl = GazeDataLoader(cf, d.numpy["train"], d.target_pad, mode="train")

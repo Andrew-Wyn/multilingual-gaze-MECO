@@ -1,6 +1,6 @@
 {
     "feature_max": 100,
-    "model_pretrained": "distilbert-base-uncased",
+    "model_pretrained": "prajjwal1/bert-tiny",
     "finetune_on_gaze": true,
     "full_finetuning": true,
     "weight_decay": 1e-2,

@@ -1,4 +1,6 @@
 import argparse
+import datetime
+import json
 import os
 from tqdm import tqdm
 
@@ -34,6 +36,37 @@ CACHE_DIR = f"{os.getcwd()}/.hf_cache/"
 os.environ['TRANSFORMERS_CACHE'] = CACHE_DIR
 
 
+def _list_to_dicts(attention_list_layers, target_list_layers, num_hidden_layers):
+    # transform datasets, from list of dicts to dict of lists
+    return_dict_attns = dict()
+    return_dict_target = dict()
+    for layer in range(num_hidden_layers):
+        return_dict_attns[layer] = list()
+        return_dict_target[layer] = list()
+    
+    for attention_dict, target_dict in zip(attention_list_layers, target_list_layers):
+        for layer in range(num_hidden_layers):
+            return_dict_attns[layer].append(attention_dict[layer])
+            return_dict_target[layer].append(target_dict[layer])
+
+    return return_dict_attns, return_dict_target
+
+
+def _get_dataset(cf, tokenizer, path):
+    modes = ["train", "valid", "test"]
+
+    # Dataset
+    d = GazeDataset(cf, tokenizer, path, "try")
+    d.read_pipeline()
+
+    dataset = []
+
+    for mode in modes:
+        dataset += d.numpy[mode]
+
+    return dataset
+
+
 def load_model_from_hf(model_name, pretrained, d_out=8):
     # Model
     LOGGER.info("initiating model:")
@@ -52,21 +85,10 @@ def load_model_from_hf(model_name, pretrained, d_out=8):
 def create_attention_dataset(cf, tokenizer, model, subwords=False):
     LOGGER.info(f"Creating Attention Dataset, subwords sum : {subwords}...")
 
-    modes = ["train", "valid", "test"]
-
-    # Dataset
-    d = GazeDataset(cf, tokenizer, "datasets/all_mean_dataset.csv", "try")
-    d.read_pipeline()
-
-    dataset = []
-
-    for mode in modes:
-        dataset += d.numpy[mode]
+    dataset = _get_dataset(cf, tokenizer, "datasets/all_mean_dataset.csv")
     
     attention_list_layers = list()
     target_list_layers = list()
-
-    print(model.config.num_hidden_layers)
 
     for input, target, mask in tqdm(dataset):
         with torch.no_grad():
@@ -128,29 +150,15 @@ def create_attention_dataset(cf, tokenizer, model, subwords=False):
             # avoid division by 0 in the normalization of a full zero row
             normalized_features[np.isnan(normalized_features)] = 0
 
-
             target_dict[layer] = list()
 
             for feat_i in range(normalized_features.shape[1]):
                 target_dict[layer].append(normalized_features[:, feat_i])
-                
 
         attention_list_layers.append(attention_dict)
         target_list_layers.append(target_dict)
 
-    # transform datasets, from list of dicts to dict of lists
-    return_dict_attns = dict()
-    return_dict_target = dict()
-    for layer in range(model.config.num_hidden_layers):
-        return_dict_attns[layer] = list()
-        return_dict_target[layer] = list()
-    
-    for attention_dict, target_dict in zip(attention_list_layers, target_list_layers):
-        for layer in range(model.config.num_hidden_layers):
-            return_dict_attns[layer].append(attention_dict[layer])
-            return_dict_target[layer].append(target_dict[layer])
-
-    return return_dict_attns, return_dict_target
+    return _list_to_dicts(attention_list_layers, target_list_layers, model.config.num_hidden_layers)
 
 
 class AttentionRollout():
@@ -163,7 +171,7 @@ class AttentionRollout():
         :return:
         """
         attentions_rollouts = []
-        for i in tqdm(range(len(attentions_list)), desc=desc, disable=disable_tqdm):
+        for i in range(len(attentions_list)):
             if output_hidden_states:
                 attentions_rollouts.append(self.compute_joint_attention(attentions_list[i]))
             else:
@@ -183,85 +191,62 @@ class AttentionRollout():
 
 
 def create_globenc_dataset(cf, tokenizer, model, subwords=False):
-    LOGGER.info(f"Creating Attention Dataset, subwords sum : {subwords}...")
+    LOGGER.info(f"Creating GlobEnc Dataset, subwords sum : {subwords}...")
 
-    modes = ["train", "valid", "test"]
-
-    # Dataset
-    d = GazeDataset(cf, tokenizer, "datasets/all_mean_dataset.csv", "try")
-    d.read_pipeline()
-
-    dataset = []
-
-    for mode in modes:
-        dataset += d.numpy[mode]
+    dataset = _get_dataset(cf, tokenizer, "datasets/all_mean_dataset.csv")
     
     attention_list_layers = list()
     target_list_layers = list()
 
     print(model.config.num_hidden_layers)
 
-    for input, target, mask in tqdm(dataset):
+    for input, target, mask in tqdm(dataset[:3]):
         # demo GLOBENC
         with torch.no_grad():
-            logits, attentions, norms = model(input_ids=torch.as_tensor([input]), attention_mask=torch.as_tensor([mask]), output_norms=True, return_dict=False)
+            _, attentions, norms = model(input_ids=torch.as_tensor([input]), attention_mask=torch.as_tensor([mask]), output_norms=True, return_dict=False)
 
         num_layers = len(attentions)
         norm_nenc = torch.stack([norms[i][4] for i in range(num_layers)]).squeeze().cpu().numpy()
-        print("Single layer N-Enc token attribution:", norm_nenc.shape)
 
         # Aggregate and compute GlobEnc
         globenc = AttentionRollout().compute_flows([norm_nenc], output_hidden_states=True)[0]
         globenc = np.array(globenc)
-        print("Aggregated N-Enc token attribution (GlobEnc):", globenc.shape)
-
-        exit(0)
 
         attention_dict = dict()
         target_dict = dict()
 
-        for layer, attention_layer in enumerate(model_output.attentions):
-            # We use the first element of the batch because batch size is 1
-            attention = attention_layer[0].numpy()
-
+        for layer, enc in enumerate(globenc):
             non_padded_ids = np.where(mask == 1)[0]
 
-            # 1. We take the mean over the 12 attention heads (like Abnar & Zuidema 2020)
-            # I also tried the sum once, but the result was even worse
-            mean_attention = np.mean(attention, axis=0)
-
-            # We drop padded tokens
-            # mean_attention = mean_attention[non_padded_ids]
-
             # We drop CLS and SEP tokens
-            mean_attention = mean_attention[1:-1]
+            enc = enc[1:-1]
 
-            # 2. For each word, we sum over the attention to the other words to determine relative importance
-            sum_attention = np.sum(mean_attention, axis=0)
+            # 2. For each word, we sum over the rollout to the other words to determine relative importance
+            sum_enc = np.sum(enc, axis=0)
 
-            sum_attention = sum_attention[non_padded_ids]
+            sum_enc = sum_enc[non_padded_ids]
 
             first_token_ids = np.where(np.multiply.reduce(target[non_padded_ids] != -1, 1) > 0)[0]
 
             # merge subwords 
             if not subwords:
                 # take the attention of only the first token of a word
-                sum_attention = sum_attention[first_token_ids]
+                sum_enc = sum_enc[first_token_ids]
             else:
                 # take the sum of the subwords's attention for a given word
                 # id of the words's start
-                attns = [np.sum(split_) for split_ in np.split(sum_attention, first_token_ids, 0)[1:-1]]
+                attns = [np.sum(split_) for split_ in np.split(sum_enc, first_token_ids, 0)[1:-1]]
                 # the last have sum all the attention from the last non masked to the sep token (sep token is the last 1 in mask)
-                last_sum = np.sum(sum_attention[first_token_ids[-1] : non_padded_ids[-1]], 0)
+                last_sum = np.sum(sum_enc[first_token_ids[-1] : non_padded_ids[-1]], 0)
                 attns.append(last_sum)
 
-                sum_attention = np.array(attns)
+                sum_enc = np.array(attns)
 
             # Taking the softmax does not make a difference for calculating correlation
             # It can be useful to scale the salience signal to the same range as the human attention
-            relative_attention = scipy.special.softmax(sum_attention)
+            relative_enc = scipy.special.softmax(sum_enc)
 
-            attention_dict[layer] = relative_attention
+            attention_dict[layer] = relative_enc
 
             word_targets = target[first_token_ids]
 
@@ -273,41 +258,30 @@ def create_globenc_dataset(cf, tokenizer, model, subwords=False):
             # avoid division by 0 in the normalization of a full zero row
             normalized_features[np.isnan(normalized_features)] = 0
 
-
             target_dict[layer] = list()
 
             for feat_i in range(normalized_features.shape[1]):
                 target_dict[layer].append(normalized_features[:, feat_i])
                 
-
         attention_list_layers.append(attention_dict)
         target_list_layers.append(target_dict)
 
-    # transform datasets, from list of dicts to dict of lists
-    return_dict_attns = dict()
-    return_dict_target = dict()
-    for layer in range(model.config.num_hidden_layers):
-        return_dict_attns[layer] = list()
-        return_dict_target[layer] = list()
-    
-    for attention_dict, target_dict in zip(attention_list_layers, target_list_layers):
-        for layer in range(model.config.num_hidden_layers):
-            return_dict_attns[layer].append(attention_dict[layer])
-            return_dict_target[layer].append(target_dict[layer])
-
-    return return_dict_attns, return_dict_target
+    return _list_to_dicts(attention_list_layers, target_list_layers, model.config.num_hidden_layers)
 
 
 def compute_spearman_correlation(attns, targets):
     spearman_correlations = list()
 
     for attn, targ in zip(attns, targets):
-        spearman_correlations.append(spearmanr(attn, targ)[0])
+        sample_spearman_corr = spearmanr(attn, targ)[0]
+        # sometimes the spearmanr can return nan in case attn or targ has std = 0
+        if not sample_spearman_corr is np.nan:
+            spearman_correlations.append(sample_spearman_corr)
 
     return np.mean(spearman_correlations)
 
 
-def compute_correlations(dict_attns, dict_target, num_features=8, num_layers=6):
+def compute_correlations(dict_attns, dict_target, num_layers, num_features=8):
     correlations = dict()
 
     for feat in range(num_features):
@@ -331,6 +305,8 @@ def main():
                     help=f'If apply linear model, default False')
     parser.add_argument('-a' ,'--average', dest='average', action=argparse.BooleanOptionalAction,
                     help=f'If apply average over the subtokens')
+    parser.add_argument('-e' ,'--encode_attention', dest='encode_attention', action=argparse.BooleanOptionalAction,
+                    help=f'If apply attention rollout with GlobEnc')
     parser.add_argument('-p' ,'--pretrained', dest='pretrained', action=argparse.BooleanOptionalAction,
                         help=f'If needed a pretrained model')
     parser.add_argument('-f' ,'--finetuned', dest='finetuned', action=argparse.BooleanOptionalAction,
@@ -349,6 +325,8 @@ def main():
     model_name = args.model_name
     model_dir = args.model_dir
     output_dir = args.output_dir
+    average = args.average
+    encode_attention = args.encode_attention
     config_file = args.config_file
 
     cf = Config.load_json(config_file)
@@ -364,11 +342,23 @@ def main():
         print("load from disk")
         model = BertForTokenClassification.from_pretrained(model_dir, output_attentions=True, output_hidden_states=False)
 
-    dict_attns, dict_target = create_globenc_dataset(cf, tokenizer, model)
+    LOGGER.info(f"The loaded model has {model.config.num_hidden_layers} layers")
 
-    correlations = compute_correlations(dict_attns, dict_target)
+    if encode_attention:
+        dict_attns, dict_target = create_globenc_dataset(cf, tokenizer, model, average)
+    else:
+        dict_attns, dict_target = create_attention_dataset(cf, tokenizer, model, average)
 
-    print(correlations)
+    correlations = compute_correlations(dict_attns, dict_target, model.config.num_hidden_layers)
+
+    if encode_attention:
+        to_print = {"GlobEnc": correlations}
+    else:
+        to_print = {"Attentions": correlations}
+
+    with open(f"{output_dir}/corrs_results_{datetime.datetime.now().time()}.json", 'w') as f:
+        json.dump(to_print, f)
+
 
 if __name__ == "__main__":
     main()

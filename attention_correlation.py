@@ -27,6 +27,7 @@ from transformers import (
     # set_seed,
 )
 
+from modeling.custom_xlm_roberta import XLMRobertaForTokenClassification
 from modeling.custom_bert import BertForTokenClassification
 
 # TODO: capire perche se non setto cache_dir in AutoTokenizer
@@ -67,11 +68,11 @@ def _get_dataset(cf, tokenizer, path):
     return dataset
 
 
-def load_model_from_hf(model_name, pretrained, d_out=8):
+def load_model_from_hf(tokenClassifier, model_name, pretrained, d_out=8):
     # Model
     LOGGER.info("initiating model:")
-    model = BertForTokenClassification.from_pretrained(model_name, num_labels=d_out,
-                                    output_attentions=False, output_hidden_states=True)
+    model = tokenClassifier.from_pretrained(model_name, num_labels=d_out,
+                                    output_attentions=True, output_hidden_states=False)
 
     if not pretrained:
         # initiate Bert with random weights
@@ -311,6 +312,8 @@ def main():
                         help=f'If needed a pretrained model')
     parser.add_argument('-f' ,'--finetuned', dest='finetuned', action=argparse.BooleanOptionalAction,
                         help=f'If needed a finetuned model')
+    parser.add_argument('-x' ,'--xlm', dest='xlm', action=argparse.BooleanOptionalAction,
+                        help=f'If using xlm-roberta')
     parser.add_argument('-c' ,'--config', dest='config_file', action='store',
                         help=f'Relative path of a .json file, that contain parameters for the fine-tune script \
                             {{ \
@@ -328,19 +331,25 @@ def main():
     average = args.average
     encode_attention = args.encode_attention
     config_file = args.config_file
+    xlm = args.xlm
 
     cf = Config.load_json(config_file)
 
     # Tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=CACHE_DIR)
 
+    if xlm:
+        tokenClassifier = XLMRobertaForTokenClassification
+    else:
+        tokenClassifier = BertForTokenClassification
+
     if not finetuned: # downaload from huggingface
         print("download from hf")
-        model = load_model_from_hf(model_name, pretrained)
+        model = load_model_from_hf(tokenClassifier, model_name, pretrained)
 
     else: # load from disk
         print("load from disk")
-        model = BertForTokenClassification.from_pretrained(model_dir, output_attentions=True, output_hidden_states=False)
+        model = tokenClassifier.from_pretrained(model_dir, output_attentions=True, output_hidden_states=False)
 
     LOGGER.info(f"The loaded model has {model.config.num_hidden_layers} layers")
 

@@ -4,6 +4,10 @@ from tqdm import tqdm
 from abc import ABC, abstractmethod
 from gaze.early_stopping import GazeEarlyStopping
 from gaze.utils import LOGGER, mask_mse_loss
+from sklearn.utils import shuffle
+from gaze.utils import LOGGER, create_finetuning_optimizer, create_scheduler, randomize_model, Config
+from modeling.custom_bert import BertForTokenClassification
+from gaze.dataloader import GazeDataLoader
 
 
 class Trainer(ABC):
@@ -88,3 +92,62 @@ class GazeTrainer(Trainer):
         self.scheduler.step()
 
         return loss.item()
+
+
+def cross_validation(cf, d, eval_dir, writer, DEVICE, k_folds=10):
+    """
+    Perform a k-fold cross-validation
+    """
+    dataset = d.numpy
+
+    l = len(dataset)
+    l_ts = l//k_folds
+
+    loss_tr_mean = 0
+    loss_ts_mean = 0
+
+    # shuffle dataset with a seed, to take a reproducible sample
+    dataset = shuffle(dataset, random_state=42)
+
+    for k in range(k_folds):
+        # cicle over folds, for every fold create train_d, valid_d
+        if k != k_folds-1: # exclude the k-th part from the validation
+            train_d = dataset[:(k)*l_ts] + dataset[(k+1)*l_ts:]
+            test_d = dataset[k*l_ts:(k+1)*l_ts]
+        else: # last fold clausole
+            train_d = dataset[:k*l_ts]
+            test_d = dataset[k*l_ts:]
+
+        train_dl = GazeDataLoader(cf, train_d, d.target_pad, mode="train")
+        test_dl = GazeDataLoader(cf, test_d, d.target_pad, mode="test") 
+
+        # Model
+        LOGGER.info("initiating model: ")
+        model = BertForTokenClassification.from_pretrained(cf.model_pretrained, num_labels=d.d_out,
+                                        output_attentions=False, output_hidden_states=False)
+
+        if cf.random_weights is True:
+            # initiate Bert with random weights
+            print("randomizing weights")
+            model = randomize_model(model)
+            #print(model.classifier.weight.data)
+
+        # optimizer
+        optim = create_finetuning_optimizer(cf, model)
+
+        # scheduler
+        scheduler = create_scheduler(cf, optim, train_dl)
+
+        # trainer
+        trainer = GazeTrainer(cf, model, train_dl, test_dl, optim, scheduler, eval_dir, "task",
+                                    DEVICE, monitor="loss_all", monitor_mode="min", writer=writer)
+        trainer.train()
+        LOGGER.info(f"Training completed task")
+
+        # loss_tr_mean += history["loss_tr"]
+        # loss_ts_mean += history["loss_vl"]
+
+    loss_tr_mean /= k_folds
+    loss_ts_mean /= k_folds
+
+    return loss_tr_mean, loss_ts_mean

@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 from tqdm import tqdm
 from abc import ABC, abstractmethod
 from gaze.early_stopping import GazeEarlyStopping
@@ -8,6 +9,7 @@ from sklearn.utils import shuffle
 from gaze.utils import LOGGER, create_finetuning_optimizer, create_scheduler, randomize_model, Config
 from modeling.custom_bert import BertForTokenClassification
 from gaze.dataloader import GazeDataLoader
+from sklearn.preprocessing import MinMaxScaler
 
 
 class Trainer(ABC):
@@ -51,13 +53,13 @@ class Trainer(ABC):
             LOGGER.info(f"Done epoch {epoch} / {self.n_epochs}")
             LOGGER.info(f"Avg loss epoch {epoch}: {epoch_loss_avg:.4f}")
 
-            self.early_stop()
+            # self.early_stop()
 
             for key, metric in self.early_stop.tester.metrics.items():
                self.writer.add_scalar(f"val/{key}", metric, it // n_batches_one_epoch)
 
-            if self.early_stop.stop:
-                break
+            # if self.early_stop.stop:
+            #     break
 
 
 class GazeTrainer(Trainer):
@@ -98,28 +100,50 @@ def cross_validation(cf, d, eval_dir, writer, DEVICE, k_folds=10):
     """
     Perform a k-fold cross-validation
     """
-    dataset = d.numpy
 
-    l = len(dataset)
+    l = len(d.text_inputs)
     l_ts = l//k_folds
 
     loss_tr_mean = 0
     loss_ts_mean = 0
 
     # shuffle dataset with a seed, to take a reproducible sample
-    dataset = shuffle(dataset, random_state=42)
+    # dataset = shuffle(dataset, random_state=42)
 
     for k in range(k_folds):
         # cicle over folds, for every fold create train_d, valid_d
         if k != k_folds-1: # exclude the k-th part from the validation
-            train_d = dataset[:(k)*l_ts] + dataset[(k+1)*l_ts:]
-            test_d = dataset[k*l_ts:(k+1)*l_ts]
+
+            train_inputs = np.append(d.text_inputs[:(k)*l_ts], d.text_inputs[(k+1)*l_ts:], axis=0)
+            train_targets = np.append(d.targets[:(k)*l_ts], d.targets[(k+1)*l_ts:], axis=0)
+            train_masks = np.append(d.masks[:(k)*l_ts], d.masks[(k+1)*l_ts:], axis=0)
+            test_inputs = d.text_inputs[k*l_ts:(k+1)*l_ts]
+            test_targets = d.targets[k*l_ts:(k+1)*l_ts]
+            test_masks = d.masks[k*l_ts:(k+1)*l_ts]
+
         else: # last fold clausole
-            train_d = dataset[:k*l_ts]
-            test_d = dataset[k*l_ts:]
+            train_inputs = d.text_inputs[:k*l_ts]
+            train_targets = d.targets[:k*l_ts]
+            train_masks = d.masks[:k*l_ts]
+            test_inputs = d.text_inputs[k*l_ts:]
+            test_targets = d.targets[k*l_ts:]
+            test_masks = d.masks[k*l_ts:]
+
+        # min max scaler the targets
+        features = train_targets
+        scaler = MinMaxScaler(feature_range=[0, d.feature_max])
+        flat_features = [j for i in features for j in i]
+        scaler.fit(flat_features)
+
+        train_targets = [list(scaler.transform(i)) for i in features]
+        test_targets = [list(scaler.transform(i)) for i in test_targets]
+
+        # create the dataset
+        train_d = list(zip(train_inputs, train_targets, train_masks))
+        test_d = list(zip(test_inputs, test_targets, test_masks))
 
         train_dl = GazeDataLoader(cf, train_d, d.target_pad, mode="train")
-        test_dl = GazeDataLoader(cf, test_d, d.target_pad, mode="test") 
+        test_dl = GazeDataLoader(cf, test_d, d.target_pad, mode="test")
 
         # Model
         LOGGER.info("initiating model: ")

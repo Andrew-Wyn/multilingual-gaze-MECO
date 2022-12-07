@@ -181,8 +181,8 @@ class GazeDataset():
 
     def calc_numpy(self):
         LOGGER.info(f"Calculating numpy arrays for task {self.task}")
-        input_numpy = np.asarray(self.text_inputs, dtype=np.int64)
-        mask_numpy = np.asarray(self.masks, dtype=np.float32)
-        target_numpy = np.asarray(self.targets, dtype=np.float32)
+        self.text_inputs = np.asarray(self.text_inputs, dtype=np.int64)
+        self.masks = np.asarray(self.masks, dtype=np.float32)
+        self.targets = np.asarray(self.targets, dtype=np.float32)
 
-        self.numpy = list(zip(input_numpy, target_numpy, mask_numpy))
+        # self.numpy = list(zip(input_numpy, target_numpy, mask_numpy))

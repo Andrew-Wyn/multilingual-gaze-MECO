@@ -73,8 +73,13 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(model, cache_dir=CACHE_DIR)
 
     # Dataset
-    d = GazeDataset(cf, tokenizer, "datasets/all_mean_dataset.csv", "try")
+    d = GazeDataset(cf, tokenizer, "datasets/it/all_mean_dataset.csv", "try")
     d.read_pipeline()
+
+    print(d.numpy[0])
+    print(d.numpy[0][0].shape)
+
+    exit(0)
 
     train_dl = GazeDataLoader(cf, d.numpy["train"], d.target_pad, mode="train")
     val_dl = GazeDataLoader(cf, d.numpy["valid"], d.target_pad, mode="val") 

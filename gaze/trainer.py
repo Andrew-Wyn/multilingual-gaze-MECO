@@ -22,6 +22,7 @@ class Trainer(ABC):
         self.device = device
         self.writer = writer
         self.tester = tester
+        self.cf = cf
 
     @abstractmethod
     def train_one_step(self, batch):
@@ -37,7 +38,6 @@ class Trainer(ABC):
         self.model.to(self.device)
         self.model.train()
 
-        epoch_loss_ls = []
         it = 1
 
         for _ in tqdm(range(1, self.n_epochs + 1)):
@@ -45,35 +45,30 @@ class Trainer(ABC):
                 it += 1
 
                 loss = self.train_one_step(batch)
-                self.writer.add_scalar("train/loss", loss, it)
-                epoch_loss_ls.append(loss)
+                self.writer.add_scalar(f"{self.task}/train/loss_step_wise", loss, it)
 
-            # epoch_loss_avg = sum(epoch_loss_ls) / len(epoch_loss_ls)
-            # epoch_loss_ls = []
-            # LOGGER.info(f"Done epoch {epoch} / {self.n_epochs}")
-            # LOGGER.info(f"Avg loss epoch {epoch}: {epoch_loss_avg:.4f}")
+            self.tester.evaluate()
 
-            if self.tester:
-                self.tester.evaluate()
-
-                for key, metric in self.tester.metrics.items():
+            for key, metric in self.tester.train_metrics.items():
+                self.writer.add_scalar(f"{self.task}/train/{key}", metric, it // n_batches_one_epoch)
+            
+            if not self.tester.test_dl is None:
+                for key, metric in self.tester.test_metrics.items():
                     self.writer.add_scalar(f"{self.task}/test/{key}", metric, it // n_batches_one_epoch)
-        
-        if self.tester:
-            LOGGER.info(f"Training Done -> Loss_all : {self.tester.metrics['loss_all']}")
+
+        LOGGER.info(f"Training Done -> Train Loss_all : {self.tester.train_metrics['loss_all']}")
+        if not self.tester.test_dl is None:
+            LOGGER.info(f"Training Done -> Test Loss_all : {self.tester.test_metrics['loss_all']}")
 
         # save the model after last epoch
         if save_model:
-            self.model.save_pretrained(os.path.join(self.dir, "model-"+self.cf.model_pretrained+"-"+str(self.cf.full_finetuning)+"-"+str(self.save_counter)))
+            self.model.save_pretrained(os.path.join(self.eval_dir, "model-"+self.cf.model_pretrained+"-"+str(self.cf.full_finetuning)))
 
 
 class GazeTrainer(Trainer):
     def __init__(self, cf, model, train_dl, optim, scheduler, eval_dir,
-                 task, device, writer, val_dl=None):
-        if val_dl:
-            tester = GazeTester(model, val_dl, device, task)
-        else:
-            tester = None
+                 task, device, writer, test_dl=None):
+        tester = GazeTester(model, device, task, train_dl, test_dl)
         super().__init__(cf, model, train_dl, eval_dir, tester, task, device, writer)
 
         self.optim = optim
@@ -112,6 +107,7 @@ def cross_validation(cf, d, eval_dir, writer, DEVICE, k_folds=10):
     l = len(d.text_inputs)
     l_ts = l//k_folds
 
+    loss_tr_mean = defaultdict(int)
     loss_ts_mean = defaultdict(int)
 
     for k in range(k_folds):
@@ -135,18 +131,14 @@ def cross_validation(cf, d, eval_dir, writer, DEVICE, k_folds=10):
         # min max scaler the targets
         train_targets, test_targets = minMaxScaling(train_targets, test_targets, d.feature_max)
 
-        # create the dataset
-        train_d = list(zip(train_inputs, train_targets, train_masks))
-        test_d = list(zip(test_inputs, test_targets, test_masks))
-
-        train_dl = GazeDataLoader(cf, train_d, d.target_pad, mode="train")
-        test_dl = GazeDataLoader(cf, test_d, d.target_pad, mode="test")
+        # create the dataloader
+        train_dl = GazeDataLoader(cf, train_inputs, train_targets, train_masks, d.target_pad, mode="train")
+        test_dl = GazeDataLoader(cf, test_inputs, test_targets, test_masks, d.target_pad, mode="test")
 
         # Model
         LOGGER.info("initiating model: ")
         model = BertForTokenClassification.from_pretrained(cf.model_pretrained, num_labels=d.d_out,
                                         output_attentions=False, output_hidden_states=False)
-
         if cf.random_weights is True:
             # initiate Bert with random weights
             # print("randomizing weights")
@@ -161,13 +153,19 @@ def cross_validation(cf, d, eval_dir, writer, DEVICE, k_folds=10):
 
         # trainer
         trainer = GazeTrainer(cf, model, train_dl, optim, scheduler, eval_dir, f"CV-Training {k}/{k_folds}",
-                                    DEVICE, writer=writer, val_dl=test_dl)
+                                    DEVICE, writer=writer, test_dl=test_dl)
         trainer.train()
 
-        for key, metric in trainer.tester.metrics.items():
+        for key, metric in trainer.tester.train_metrics.items():
+            loss_tr_mean[key] += metric
+
+        for key, metric in trainer.tester.test_metrics.items():
             loss_ts_mean[key] += metric
+
+    for key in loss_tr_mean:
+        loss_tr_mean[key] /= k_folds
 
     for key in loss_ts_mean:
         loss_ts_mean[key] /= k_folds
 
-    return loss_ts_mean
+    return loss_tr_mean, loss_ts_mean

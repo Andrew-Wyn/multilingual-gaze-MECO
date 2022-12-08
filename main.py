@@ -78,8 +78,12 @@ def main():
     d.randomize_data()
 
     # 10-fold cross-validation
-    test_losses = cross_validation(cf, d, eval_dir, writer, DEVICE, k_folds=10)
+    train_losses, test_losses = cross_validation(cf, d, eval_dir, writer, DEVICE, k_folds=10)
 
+    print("Train losses:")
+    print(train_losses)
+
+    print("Test Losses:")
     print(test_losses)
 
     # retrain over all dataset
@@ -87,10 +91,8 @@ def main():
     # min max scaler the targets
     d.targets = minMaxScaling(d.targets, feature_max=d.feature_max)
 
-    # create the dataset
-    train_d = list(zip(d.text_inputs, d.targets, d.masks))
-
-    train_dl = GazeDataLoader(cf, train_d, d.target_pad, mode="train")
+    # create the dataloader
+    train_dl = GazeDataLoader(cf, d.text_inputs, d.targets, d.masks, d.target_pad, mode="train")
 
     # Model
     LOGGER.info("initiating model: ")
@@ -112,7 +114,7 @@ def main():
     # trainer
     trainer = GazeTrainer(cf, model, train_dl, optim, scheduler, eval_dir, f"Final_Training",
                                 DEVICE, writer=writer)
-    trainer.train()
+    trainer.train(save_model=True)
 
 if __name__ == "__main__":
     main()

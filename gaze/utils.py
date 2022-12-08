@@ -2,6 +2,7 @@ from transformers import AdamW, get_linear_schedule_with_warmup
 import torch
 import logging.config
 import json
+from sklearn.preprocessing import MinMaxScaler
 
 
 CONFIG = {
@@ -118,3 +119,18 @@ class GazePredictionLoss:
         losses[0] /= sum([i * self.d_gaze for i in b_length])
         losses[1:] /= sum(b_length)
         return losses
+
+
+def minMaxScaling(train_targets, test_targets=None, feature_max=1):   
+    features = train_targets
+    scaler = MinMaxScaler(feature_range=[0, feature_max])
+    flat_features = [j for i in features for j in i]
+    scaler.fit(flat_features)
+
+    train_targets = [list(scaler.transform(i)) for i in features]
+    
+    if not test_targets is None:
+        test_targets = [list(scaler.transform(i)) for i in test_targets]
+        return train_targets, test_targets
+    
+    return train_targets

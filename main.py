@@ -3,7 +3,7 @@ from gaze.utils import Config
 from gaze.trainer import cross_validation
 import torch
 from sklearn.utils import shuffle
-from gaze.utils import LOGGER, create_finetuning_optimizer, create_scheduler, randomize_model, Config
+from gaze.utils import LOGGER, create_finetuning_optimizer, create_scheduler, randomize_model, Config, minMaxScaling
 from modeling.custom_bert import BertForTokenClassification
 from gaze.dataloader import GazeDataLoader
 from sklearn.preprocessing import MinMaxScaler
@@ -75,30 +75,20 @@ def main():
     # Dataset
     d = GazeDataset(cf, tokenizer, "datasets/it/all_mean_dataset.csv", "try")
     d.read_pipeline()
+    d.randomize_data()
 
     # 10-fold cross-validation
     test_losses = cross_validation(cf, d, eval_dir, writer, DEVICE, k_folds=10)
 
     print(test_losses)
 
-    # shuffle dataset with a seed, to take a reproducible sample
-    shuffled_ids = shuffle(range(d.text_inputs.shape[0]), random_state=42)
-
-    text_inputs = d.text_inputs[shuffled_ids]
-    targets = d.targets[shuffled_ids]
-    masks = d.masks[shuffled_ids]
-
     # retrain over all dataset
-    # min max scaler the targets
-    features = targets
-    scaler = MinMaxScaler(feature_range=[0, d.feature_max])
-    flat_features = [j for i in features for j in i]
-    scaler.fit(flat_features)
 
-    targets = [list(scaler.transform(i)) for i in features]
+    # min max scaler the targets
+    d.targets = minMaxScaling(d.targets, feature_max=d.feature_max)
 
     # create the dataset
-    train_d = list(zip(text_inputs, targets, masks))
+    train_d = list(zip(d.text_inputs, d.targets, d.masks))
 
     train_dl = GazeDataLoader(cf, train_d, d.target_pad, mode="train")
 
@@ -120,11 +110,9 @@ def main():
     scheduler = create_scheduler(cf, optim, train_dl)
 
     # trainer
-    trainer = GazeTrainer(cf, model, train_dl, optim, scheduler, eval_dir, "task",
+    trainer = GazeTrainer(cf, model, train_dl, optim, scheduler, eval_dir, f"Final_Training",
                                 DEVICE, writer=writer)
     trainer.train()
-    LOGGER.info(f"Training completed task")
-
 
 if __name__ == "__main__":
     main()

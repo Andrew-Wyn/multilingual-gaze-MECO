@@ -7,11 +7,9 @@ from collections import defaultdict
 from abc import ABC, abstractmethod
 from gaze.tester import GazeTester
 from gaze.utils import LOGGER, mask_mse_loss
-from sklearn.utils import shuffle
-from gaze.utils import LOGGER, create_finetuning_optimizer, create_scheduler, randomize_model, Config
+from gaze.utils import LOGGER, create_finetuning_optimizer, create_scheduler, randomize_model, minMaxScaling
 from modeling.custom_bert import BertForTokenClassification
 from gaze.dataloader import GazeDataLoader
-from sklearn.preprocessing import MinMaxScaler
 
 
 class Trainer(ABC):
@@ -42,7 +40,7 @@ class Trainer(ABC):
         epoch_loss_ls = []
         it = 1
 
-        for epoch in tqdm(range(1, self.n_epochs + 1)):
+        for _ in tqdm(range(1, self.n_epochs + 1)):
             for batch in tqdm(self.train_dl):
                 it += 1
 
@@ -50,17 +48,20 @@ class Trainer(ABC):
                 self.writer.add_scalar("train/loss", loss, it)
                 epoch_loss_ls.append(loss)
 
-            epoch_loss_avg = sum(epoch_loss_ls) / len(epoch_loss_ls)
-            epoch_loss_ls = []
-            LOGGER.info(f"Done epoch {epoch} / {self.n_epochs}")
-            LOGGER.info(f"Avg loss epoch {epoch}: {epoch_loss_avg:.4f}")
+            # epoch_loss_avg = sum(epoch_loss_ls) / len(epoch_loss_ls)
+            # epoch_loss_ls = []
+            # LOGGER.info(f"Done epoch {epoch} / {self.n_epochs}")
+            # LOGGER.info(f"Avg loss epoch {epoch}: {epoch_loss_avg:.4f}")
 
             if self.tester:
                 self.tester.evaluate()
 
                 for key, metric in self.tester.metrics.items():
-                    self.writer.add_scalar(f"val/{key}", metric, it // n_batches_one_epoch)
+                    self.writer.add_scalar(f"{self.task}/test/{key}", metric, it // n_batches_one_epoch)
         
+        if self.tester:
+            LOGGER.info(f"Training Done -> Loss_all : {self.tester.metrics['loss_all']}")
+
         # save the model after last epoch
         if save_model:
             self.model.save_pretrained(os.path.join(self.dir, "model-"+self.cf.model_pretrained+"-"+str(self.cf.full_finetuning)+"-"+str(self.save_counter)))
@@ -113,39 +114,26 @@ def cross_validation(cf, d, eval_dir, writer, DEVICE, k_folds=10):
 
     loss_ts_mean = defaultdict(int)
 
-    # shuffle dataset with a seed, to take a reproducible sample
-    shuffled_ids = shuffle(range(d.text_inputs.shape[0]), random_state=42)
-    text_inputs = d.text_inputs[shuffled_ids]
-    targets = d.targets[shuffled_ids]
-    masks = d.masks[shuffled_ids]
-
     for k in range(k_folds):
         # cicle over folds, for every fold create train_d, valid_d
         if k != k_folds-1: # exclude the k-th part from the validation
-
-            train_inputs = np.append(text_inputs[:(k)*l_ts], text_inputs[(k+1)*l_ts:], axis=0)
-            train_targets = np.append(targets[:(k)*l_ts], targets[(k+1)*l_ts:], axis=0)
-            train_masks = np.append(masks[:(k)*l_ts], masks[(k+1)*l_ts:], axis=0)
-            test_inputs = text_inputs[k*l_ts:(k+1)*l_ts]
-            test_targets = targets[k*l_ts:(k+1)*l_ts]
-            test_masks = masks[k*l_ts:(k+1)*l_ts]
+            train_inputs = np.append(d.text_inputs[:(k)*l_ts], d.text_inputs[(k+1)*l_ts:], axis=0)
+            train_targets = np.append(d.targets[:(k)*l_ts], d.targets[(k+1)*l_ts:], axis=0)
+            train_masks = np.append(d.masks[:(k)*l_ts], d.masks[(k+1)*l_ts:], axis=0)
+            test_inputs = d.text_inputs[k*l_ts:(k+1)*l_ts]
+            test_targets = d.targets[k*l_ts:(k+1)*l_ts]
+            test_masks = d.masks[k*l_ts:(k+1)*l_ts]
 
         else: # last fold clausole
-            train_inputs = text_inputs[:k*l_ts]
-            train_targets = targets[:k*l_ts]
-            train_masks = masks[:k*l_ts]
-            test_inputs = text_inputs[k*l_ts:]
-            test_targets = targets[k*l_ts:]
-            test_masks = masks[k*l_ts:]
+            train_inputs = d.text_inputs[:k*l_ts]
+            train_targets = d.targets[:k*l_ts]
+            train_masks = d.masks[:k*l_ts]
+            test_inputs = d.text_inputs[k*l_ts:]
+            test_targets = d.targets[k*l_ts:]
+            test_masks = d.masks[k*l_ts:]
 
         # min max scaler the targets
-        features = train_targets
-        scaler = MinMaxScaler(feature_range=[0, d.feature_max])
-        flat_features = [j for i in features for j in i]
-        scaler.fit(flat_features)
-
-        train_targets = [list(scaler.transform(i)) for i in features]
-        test_targets = [list(scaler.transform(i)) for i in test_targets]
+        train_targets, test_targets = minMaxScaling(train_targets, test_targets, d.feature_max)
 
         # create the dataset
         train_d = list(zip(train_inputs, train_targets, train_masks))
@@ -161,7 +149,7 @@ def cross_validation(cf, d, eval_dir, writer, DEVICE, k_folds=10):
 
         if cf.random_weights is True:
             # initiate Bert with random weights
-            print("randomizing weights")
+            # print("randomizing weights")
             model = randomize_model(model)
             #print(model.classifier.weight.data)
 
@@ -172,10 +160,9 @@ def cross_validation(cf, d, eval_dir, writer, DEVICE, k_folds=10):
         scheduler = create_scheduler(cf, optim, train_dl)
 
         # trainer
-        trainer = GazeTrainer(cf, model, train_dl, optim, scheduler, eval_dir, "task",
+        trainer = GazeTrainer(cf, model, train_dl, optim, scheduler, eval_dir, f"CV-Training {k}/{k_folds}",
                                     DEVICE, writer=writer, val_dl=test_dl)
         trainer.train()
-        LOGGER.info(f"Training completed task")
 
         for key, metric in trainer.tester.metrics.items():
             loss_ts_mean[key] += metric

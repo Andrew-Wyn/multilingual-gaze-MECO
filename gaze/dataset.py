@@ -1,8 +1,7 @@
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.utils import pad_sequences
+from sklearn.utils import shuffle
 from gaze.utils import LOGGER
 
 
@@ -106,64 +105,6 @@ class GazeDataset():
 
         LOGGER.info(f"Lenght of data : {len(self.text_inputs)}")
 
-        # split in train, valid, test
-        # train_sentences, test_sentences, train_targets, test_targets = train_test_split(sentences, targets, shuffle=False, test_size=0.10)
-        # train_sentences, valid_sentences, valid_targets, valid_targets = train_test_split(train_sentences, train_targets, shuffle=False, test_size=0.15)
-
-        # self.text_inputs["train"] = train_sentences
-        # self.targets["train"] = train_targets
-        #LOGGER.info(f"Lenght of Train data : {len(self.text_inputs['train'])}")
-
-        # self.text_inputs["valid"] = valid_sentences
-        # self.targets["valid"] = valid_targets
-        # LOGGER.info(f"Lenght of Valid data : {len(self.text_inputs['valid'])}")
-        
-        # self.text_inputs["test"] = test_sentences
-        # self.targets["test"] = test_targets
-        # LOGGER.info(f"Lenght of Test data : {len(self.text_inputs['test'])}")
-
-        # # check for duplicate sentence in train and test set
-        # dups = []
-        # for i, s in enumerate(self.text_inputs["train"]):
-        #     if s in self.text_inputs["test"]:
-        #         LOGGER.warning("Duplicate in test set....")
-        #         dups.append(i)
-
-        # # remove duplicated from training data
-        # print(len(dups))
-        # for d in sorted(dups, reverse=True):
-        #     del self.text_inputs["train"][d]
-        #     del self.targets["train"][d]
-        # LOGGER.info(f"Lenght of Train data after removed duplicates : {len(self.text_inputs['train'])}")
-
-    # TODO: move to 10-fold-cv
-    def standardize(self):
-        """
-        Standardizes the features between 0 and self.feature_max.
-        """
-        LOGGER.info(f"Standardizing target data for task {self.task}")
-        features = self.targets["train"]
-        scaler = MinMaxScaler(feature_range=[0, self.feature_max])
-        flat_features = [j for i in features for j in i]
-        scaler.fit(flat_features)
-
-        self.targets["train"] = [list(scaler.transform(i)) for i in features]
-        self.targets["valid"] = [list(scaler.transform(i)) for i in self.targets["valid"]]
-        self.targets["test"] = [list(scaler.transform(i)) for i in self.targets["test"]]
-
-        # filen = os.path.join("scaled-test-"+self.task+".csv")
-
-        #print(filen)
-
-        # flat_preds = [j for i in self.targets["test"] for j in i]
-
-        # preds_pd = pd.DataFrame(flat_preds, columns=["n_fix", "first_fix_dur", "first_pass_dur",
-        #                                              "total_fix_dur", "mean_fix_dur", "fix_prob",
-        #                                              "n_refix", "reread_prob"])
-        # preds_pd.to_csv(filen)
-
-        # print("saved.")
-
     def pad_targets(self):
         """
         Adds the pad tokens in the positions of the [CLS] and [SEP] tokens, adds the pad
@@ -185,4 +126,9 @@ class GazeDataset():
         self.masks = np.asarray(self.masks, dtype=np.float32)
         self.targets = np.asarray(self.targets, dtype=np.float32)
 
-        # self.numpy = list(zip(input_numpy, target_numpy, mask_numpy))
+    def randomize_data(self):
+        LOGGER.info(f"Randomize numpy arrays for task {self.task}")
+        shuffled_ids = shuffle(range(self.text_inputs.shape[0]), random_state=42)
+        self.text_inputs = self.text_inputs[shuffled_ids]
+        self.targets = self.targets[shuffled_ids]
+        self.masks = self.masks[shuffled_ids]

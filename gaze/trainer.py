@@ -11,6 +11,10 @@ from gaze.utils import LOGGER, create_finetuning_optimizer, create_scheduler, ra
 from modeling.custom_bert import BertForTokenClassification
 from gaze.dataloader import GazeDataLoader
 
+from transformers import (
+    AutoConfig,
+    AutoModelForTokenClassification
+)
 
 class Trainer(ABC):
     def __init__(self, cf, model, train_dl, eval_dir, tester, task, device, writer):
@@ -136,14 +140,17 @@ def cross_validation(cf, d, eval_dir, writer, DEVICE, k_folds=10):
         test_dl = GazeDataLoader(cf, test_inputs, test_targets, test_masks, d.target_pad, mode="test")
 
         # Model
-        LOGGER.info("initiating model: ")
-        model = BertForTokenClassification.from_pretrained(cf.model_pretrained, num_labels=d.d_out,
+        LOGGER.info("initiating model:")
+        if cf.random_weights:
+            # initiate model with random weights
+            LOGGER.info("Take randomized model:")
+            config = AutoConfig.from_pretrained(cf.model_pretrained, num_labels=d.d_out,
                                         output_attentions=False, output_hidden_states=False)
-        if cf.random_weights is True:
-            # initiate Bert with random weights
-            # print("randomizing weights")
-            model = randomize_model(model)
-            #print(model.classifier.weight.data)
+            model = AutoModelForTokenClassification.from_config(config)
+        else:
+            LOGGER.info("Take pretrained model:")
+            model = BertForTokenClassification.from_pretrained(cf.model_pretrained, num_labels=d.d_out,
+                                output_attentions=False, output_hidden_states=False)
 
         # optimizer
         optim = create_finetuning_optimizer(cf, model)

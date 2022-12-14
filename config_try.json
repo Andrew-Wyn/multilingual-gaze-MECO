@@ -11,5 +11,5 @@
     "eval_bs": 16,
     "n_epochs": 1,
     "patience": 7,
-    "random_weights": false
+    "random_weights": true
   }

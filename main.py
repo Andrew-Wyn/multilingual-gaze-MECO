@@ -9,8 +9,8 @@ from gaze.dataloader import GazeDataLoader
 from sklearn.preprocessing import MinMaxScaler
 from gaze.trainer import GazeTrainer
 from transformers import (
-    # AutoConfig,
-    # AutoModelForTokenClassification,
+    AutoConfig,
+    AutoModelForTokenClassification,
     AutoTokenizer,
     # DataCollatorWithPadding,
     # EvalPrediction,
@@ -95,15 +95,19 @@ def main():
     train_dl = GazeDataLoader(cf, d.text_inputs, d.targets, d.masks, d.target_pad, mode="train")
 
     # Model
-    LOGGER.info("initiating model: ")
-    model = BertForTokenClassification.from_pretrained(cf.model_pretrained, num_labels=d.d_out,
+    LOGGER.info("initiating model:")
+    if cf.random_weights:
+        # initiate model with random weights
+        LOGGER.info("Take randomized model:")
+        config = AutoConfig.from_pretrained(cf.model_pretrained, num_labels=d.d_out,
                                     output_attentions=False, output_hidden_states=False)
+        model = AutoModelForTokenClassification.from_config(config)
+    else:
+        LOGGER.info("Take pretrained model:")
+        model = BertForTokenClassification.from_pretrained(cf.model_pretrained, num_labels=d.d_out,
+                            output_attentions=False, output_hidden_states=False)
 
-    if cf.random_weights is True:
-        # initiate Bert with random weights
-        print("randomizing weights")
-        model = randomize_model(model)
-        #print(model.classifier.weight.data)
+    exit(0)
 
     # optimizer
     optim = create_finetuning_optimizer(cf, model)

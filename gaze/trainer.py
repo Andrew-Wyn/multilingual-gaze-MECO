@@ -17,10 +17,9 @@ from transformers import (
 )
 
 class Trainer(ABC):
-    def __init__(self, cf, model, train_dl, eval_dir, tester, task, device, writer):
+    def __init__(self, cf, model, train_dl, tester, task, device, writer):
         self.model = model
         self.train_dl = train_dl
-        self.eval_dir = eval_dir
         self.n_epochs = cf.n_epochs
         self.task = task
         self.device = device
@@ -66,14 +65,20 @@ class Trainer(ABC):
 
         # save the model after last epoch
         if save_model:
-            self.model.save_pretrained(os.path.join(self.eval_dir, "model-"+self.cf.model_pretrained+"-"+str(self.cf.full_finetuning)))
+            folder_name = os.path.join(self.cf.output_dir, "model-"+self.cf.model_name+"-finetuned-")
+            if self.cf.random_weights:
+                folder_name = folder_name + "randomized"
+            else:
+                folder_name = folder_name + "pretrained"
+
+            self.model.save_pretrained(folder_name)
 
 
 class GazeTrainer(Trainer):
-    def __init__(self, cf, model, train_dl, optim, scheduler, eval_dir,
+    def __init__(self, cf, model, train_dl, optim, scheduler,
                  task, device, writer, test_dl=None):
         tester = GazeTester(model, device, task, train_dl, test_dl)
-        super().__init__(cf, model, train_dl, eval_dir, tester, task, device, writer)
+        super().__init__(cf, model, train_dl, tester, task, device, writer)
 
         self.optim = optim
         self.scheduler = scheduler
@@ -103,7 +108,7 @@ class GazeTrainer(Trainer):
         return loss.item()
 
 
-def cross_validation(cf, d, eval_dir, writer, DEVICE, k_folds=10):
+def cross_validation(cf, d, writer, DEVICE, k_folds=10):
     """
     Perform a k-fold cross-validation
     """
@@ -142,14 +147,14 @@ def cross_validation(cf, d, eval_dir, writer, DEVICE, k_folds=10):
         # Model
         LOGGER.info("initiating model:")
         if cf.random_weights:
-            # initiate model with random weights
             LOGGER.info("Take randomized model:")
-            config = AutoConfig.from_pretrained(cf.model_pretrained, num_labels=d.d_out,
+            # initiate model with random weights
+            config = AutoConfig.from_pretrained(cf.model_name, num_labels=d.d_out,
                                         output_attentions=False, output_hidden_states=False)
             model = AutoModelForTokenClassification.from_config(config)
         else:
             LOGGER.info("Take pretrained model:")
-            model = BertForTokenClassification.from_pretrained(cf.model_pretrained, num_labels=d.d_out,
+            model = BertForTokenClassification.from_pretrained(cf.model_name, num_labels=d.d_out,
                                 output_attentions=False, output_hidden_states=False)
 
         # optimizer
@@ -159,7 +164,7 @@ def cross_validation(cf, d, eval_dir, writer, DEVICE, k_folds=10):
         scheduler = create_scheduler(cf, optim, train_dl)
 
         # trainer
-        trainer = GazeTrainer(cf, model, train_dl, optim, scheduler, eval_dir, f"CV-Training {k}/{k_folds}",
+        trainer = GazeTrainer(cf, model, train_dl, optim, scheduler, f"CV-Training: {k}/{k_folds}",
                                     DEVICE, writer=writer, test_dl=test_dl)
         trainer.train()
 

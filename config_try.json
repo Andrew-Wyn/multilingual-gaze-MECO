@@ -1,15 +1,17 @@
 {
-    "feature_max": 100,
-    "model_pretrained": "prajjwal1/bert-tiny",
-    "finetune_on_gaze": true,
-    "full_finetuning": true,
-    "weight_decay": 1e-2,
-    "lr": 3e-5,
-    "eps": 1e-8,
-    "max_grad_norm": 1.0,
-    "train_bs": 16,
-    "eval_bs": 16,
-    "n_epochs": 1,
-    "patience": 7,
-    "random_weights": true
-  }
+  "feature_max": 100,
+  "model_name": "prajjwal1/bert-tiny",
+  "finetune_on_gaze": true,
+  "full_finetuning": true,
+  "weight_decay": 1e-2,
+  "lr": 3e-5,
+  "eps": 1e-8,
+  "max_grad_norm": 1.0,
+  "train_bs": 16,
+  "eval_bs": 16,
+  "n_epochs": 1,
+  "patience": 7,
+  "random_weights": true,
+  "output_dir": "finetuning_dir",
+  "dataset": "datasets/it/all_mean_dataset.csv"
+}

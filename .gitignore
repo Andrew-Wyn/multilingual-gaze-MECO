@@ -5,6 +5,6 @@ __pycache__
 
 # miscellaneous
 .hf_cache
-eval_dir
+finetuning_dir
 probe_dir
 corrs_dir

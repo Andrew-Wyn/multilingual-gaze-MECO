@@ -76,8 +76,8 @@ class Trainer(ABC):
 
 class GazeTrainer(Trainer):
     def __init__(self, cf, model, train_dl, optim, scheduler,
-                 task, device, writer, test_dl=None):
-        tester = GazeTester(model, device, task, train_dl, test_dl)
+                 task, device, writer, features, test_dl=None):
+        tester = GazeTester(model, device, task, train_dl, features, test_dl)
         super().__init__(cf, model, train_dl, tester, task, device, writer)
 
         self.optim = optim
@@ -156,6 +156,9 @@ def cross_validation(cf, d, writer, DEVICE, k_folds=10):
             LOGGER.info("Take pretrained model:")
             model = BertForTokenClassification.from_pretrained(cf.model_name, num_labels=d.d_out,
                                 output_attentions=False, output_hidden_states=False)
+
+        print(model)
+        exit(0)
 
         # optimizer
         optim = create_finetuning_optimizer(cf, model)

@@ -13,5 +13,6 @@
   "patience": 7,
   "random_weights": true,
   "output_dir": "finetuning_dir",
-  "dataset": "datasets/it/all_mean_dataset.csv"
+  "dataset": "datasets/it/all_mean_dataset.csv",
+  "used_feature": "firstfix.dur"
 }

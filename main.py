@@ -54,7 +54,7 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(cf.model_name, cache_dir=CACHE_DIR)
 
     # Dataset
-    d = GazeDataset(cf, tokenizer, cf.dataset, "try")
+    d = GazeDataset(cf, tokenizer, cf.dataset)
     d.read_pipeline()
     d.randomize_data()
 

@@ -6,12 +6,11 @@ from gaze.utils import LOGGER
 
 
 class GazeDataset():
-    def __init__(self, cf, tokenizer, filename, task):
+    def __init__(self, cf, tokenizer, filename):
         self.tokenizer = tokenizer  # tokenizer for the BERT model
         self.filename = filename
-        self.task = task
-
-        self.modes = ["train", "valid", "test"]
+        self.used_feature = cf.used_feature
+        self.features = []
 
         self.text_inputs = []
         self.targets = []
@@ -38,7 +37,7 @@ class GazeDataset():
         """
         Tokenizes the sentences in the dataset with the pre-trained tokenizer, storing the start index of each word.
         """
-        LOGGER.info(f"Tokenizing sentences for task {self.task}")
+        LOGGER.info(f"Tokenizing sentences")
         tokenized = []
         maps = []
 
@@ -57,7 +56,7 @@ class GazeDataset():
         """
         Converts tokens to ids for the BERT model.
         """
-        LOGGER.info(f"Calculating input ids for task {self.task}")
+        LOGGER.info(f"Calculating input ids")
         ids = [self.tokenizer.prepare_for_model(self.tokenizer.convert_tokens_to_ids(s))["input_ids"]
                 for s in self.text_inputs]
         self.text_inputs = pad_sequences(ids, value=self.tokenizer.pad_token_id, padding="post")
@@ -66,7 +65,7 @@ class GazeDataset():
         """
         Calculates key paddding attention masks for the BERT model.
         """
-        LOGGER.info(f"Calculating attention masks for task {self.task}")
+        LOGGER.info(f"Calculating attention masks")
         self.masks = [[j != self.tokenizer.pad_token_id for j in i] for i in self.text_inputs]
 
     def read_pipeline(self):
@@ -75,7 +74,6 @@ class GazeDataset():
         self.d_out = len(self.targets[0][0])  # number of gaze features
         self.target_pad = -1
 
-        # self.standardize()
         self.tokenize_from_words()
         self.pad_targets()
         self.calc_input_ids()
@@ -83,8 +81,21 @@ class GazeDataset():
         self.calc_numpy()
 
     def _create_senteces_from_data(self, data):
+
+        dropping_cols = {"sentnum", "ia", "lang", "trialid", "ianum", "trial_sentnum"}
+
+        self.features = [e for e in list(data.columns) if e not in dropping_cols]
+
         word_func = lambda s: [w for w in s["ia"].values.tolist()]
-        features_func = lambda s: [np.array(s.drop(columns=["sentnum", "ia", "lang", "trialid", "ianum", "trial_sentnum"]).iloc[i])
+
+        print(self.used_feature)
+        print(self.used_feature in self.features)
+
+        if not self.used_feature is None and self.used_feature in self.features:
+            features_func = lambda s: [np.array([s.drop(columns=dropping_cols).iloc[i, self.features.index(self.used_feature)]])
+                                    for i in range(len(s))]
+        else:
+            features_func = lambda s: [np.array(s.drop(columns=dropping_cols).iloc[i])
                                     for i in range(len(s))]
 
         sentences = data.groupby("sentnum").apply(word_func).tolist()
@@ -94,7 +105,7 @@ class GazeDataset():
         return sentences, targets
 
     def load_data(self):
-        LOGGER.info(f"Loading data for task {self.task}")
+        LOGGER.info(f"Loading data")
         
         dataset = pd.read_csv(self.filename, index_col=0)
 
@@ -110,7 +121,7 @@ class GazeDataset():
         Adds the pad tokens in the positions of the [CLS] and [SEP] tokens, adds the pad
         tokens in the positions of the subtokens, and pads the targets with the pad token.
         """
-        LOGGER.info(f"Padding targets for task {self.task}")
+        LOGGER.info(f"Padding targets")
         targets = [np.full((len(i), self.d_out), self.target_pad) for i in self.text_inputs]
         for k, (i, j) in enumerate(zip(self.targets, self.maps)):
             targets[k][j, :] = i
@@ -121,13 +132,13 @@ class GazeDataset():
         self.targets = pad_sequences(targets, value=self.target_pad, padding="post")
 
     def calc_numpy(self):
-        LOGGER.info(f"Calculating numpy arrays for task {self.task}")
+        LOGGER.info(f"Calculating numpy arrays")
         self.text_inputs = np.asarray(self.text_inputs, dtype=np.int64)
         self.masks = np.asarray(self.masks, dtype=np.float32)
         self.targets = np.asarray(self.targets, dtype=np.float32)
 
     def randomize_data(self):
-        LOGGER.info(f"Randomize numpy arrays for task {self.task}")
+        LOGGER.info(f"Randomize numpy arrays")
         shuffled_ids = shuffle(range(self.text_inputs.shape[0]), random_state=42)
         self.text_inputs = self.text_inputs[shuffled_ids]
         self.targets = self.targets[shuffled_ids]

@@ -3,7 +3,6 @@ import os
 import pandas as pd
 import torch
 import torch.nn as nn
-from tqdm.auto import tqdm
 
 from gaze.utils import mask_mse_loss, LOGGER, GazePredictionLoss
 from abc import ABC, abstractmethod
@@ -63,7 +62,7 @@ class GazeTester(Tester):
             losses_metric = torch.zeros(self.criterion_metric.d_report)
             self.preds = []
 
-            for batch in tqdm(dl):
+            for batch in dl:
                 b_input, b_target, b_mask = batch
                 b_input = b_input.to(self.device)
                 b_target = b_target.to(self.device)

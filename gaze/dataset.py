@@ -88,9 +88,6 @@ class GazeDataset():
 
         word_func = lambda s: [w for w in s["ia"].values.tolist()]
 
-        print(self.used_feature)
-        print(self.used_feature in self.features)
-
         if not self.used_feature is None and self.used_feature in self.features:
             features_func = lambda s: [np.array([s.drop(columns=dropping_cols).iloc[i, self.features.index(self.used_feature)]])
                                     for i in range(len(s))]

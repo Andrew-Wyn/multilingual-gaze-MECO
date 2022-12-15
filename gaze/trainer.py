@@ -44,7 +44,7 @@ class Trainer(ABC):
         it = 1
 
         for _ in tqdm(range(1, self.n_epochs + 1)):
-            for batch in tqdm(self.train_dl):
+            for batch in self.train_dl:
                 it += 1
 
                 loss = self.train_one_step(batch)
@@ -66,18 +66,24 @@ class Trainer(ABC):
         # save the model after last epoch
         if save_model:
             folder_name = os.path.join(self.cf.output_dir, "model-"+self.cf.model_name+"-finetuned-")
+            
             if self.cf.random_weights:
                 folder_name = folder_name + "randomized"
             else:
                 folder_name = folder_name + "pretrained"
+
+            if self.cf.full_finetuning:
+                folder_name = folder_name + "-full"
+            else:
+                folder_name = folder_name + "-notfull"
 
             self.model.save_pretrained(folder_name)
 
 
 class GazeTrainer(Trainer):
     def __init__(self, cf, model, train_dl, optim, scheduler,
-                 task, device, writer, features, test_dl=None):
-        tester = GazeTester(model, device, task, train_dl, features, test_dl)
+                 task, device, writer, test_dl=None):
+        tester = GazeTester(model, device, task, train_dl, test_dl)
         super().__init__(cf, model, train_dl, tester, task, device, writer)
 
         self.optim = optim
@@ -137,6 +143,10 @@ def cross_validation(cf, d, writer, DEVICE, k_folds=10):
             test_targets = d.targets[k*l_ts:]
             test_masks = d.masks[k*l_ts:]
 
+
+        LOGGER.info(f"Train data: {len(train_inputs)}")
+        LOGGER.info(f"Test data: {len(test_inputs)}")
+
         # min max scaler the targets
         train_targets, test_targets = minMaxScaling(train_targets, test_targets, d.feature_max)
 
@@ -157,9 +167,6 @@ def cross_validation(cf, d, writer, DEVICE, k_folds=10):
             model = BertForTokenClassification.from_pretrained(cf.model_name, num_labels=d.d_out,
                                 output_attentions=False, output_hidden_states=False)
 
-        print(model)
-        exit(0)
-
         # optimizer
         optim = create_finetuning_optimizer(cf, model)
 
@@ -167,7 +174,7 @@ def cross_validation(cf, d, writer, DEVICE, k_folds=10):
         scheduler = create_scheduler(cf, optim, train_dl)
 
         # trainer
-        trainer = GazeTrainer(cf, model, train_dl, optim, scheduler, f"CV-Training: {k}/{k_folds}",
+        trainer = GazeTrainer(cf, model, train_dl, optim, scheduler, f"CV-Training-{k+1}/{k_folds}",
                                     DEVICE, writer=writer, test_dl=test_dl)
         trainer.train()
 

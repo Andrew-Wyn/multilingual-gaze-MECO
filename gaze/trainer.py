@@ -102,7 +102,7 @@ class GazeTrainer(Trainer):
         b_mask = b_mask.to(self.device)
 
         b_output = self.model(input_ids=b_input, attention_mask=b_mask)[0]
-
+        
         active_outputs, active_targets = mask_mse_loss(b_output, b_target, self.target_pad, self.model.num_labels)
         loss = self.criterion(active_outputs, active_targets)
 

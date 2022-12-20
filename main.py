@@ -59,6 +59,7 @@ def main():
     d.randomize_data()
 
     # 10-fold cross-validation
+    """
     train_losses, test_losses = cross_validation(cf, d, writer, DEVICE, k_folds=cf.k_folds)
 
     print("Train losses:")
@@ -66,11 +67,12 @@ def main():
 
     print("Test Losses:")
     print(test_losses)
+    """
 
     # retrain over all dataset
 
     # min max scaler the targets
-    d.targets = minMaxScaling(d.targets, feature_max=d.feature_max)
+    d.targets = minMaxScaling(d.targets, feature_max=d.feature_max, pad_token=d.target_pad)
 
     # create the dataloader
     train_dl = GazeDataLoader(cf, d.text_inputs, d.targets, d.masks, d.target_pad, mode="train")

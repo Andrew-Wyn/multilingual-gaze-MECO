@@ -12,6 +12,6 @@
   "random_weights": false,
   "output_dir": "finetuning_dir",
   "dataset": "datasets/it/all_mean_dataset.csv",
-  "used_feature": "prob_skip",
+  "used_feature": null,
   "k_folds": 10
 }

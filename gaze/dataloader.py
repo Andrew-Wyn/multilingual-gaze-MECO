@@ -8,7 +8,7 @@ class GazeDataLoader(DataLoader):
         self.target_pad = target_pad
 
         dataset = TensorDataset(torch.as_tensor(inputs),
-                                torch.as_tensor(targets),
+                                torch.as_tensor(targets, dtype=torch.float32),
                                 torch.as_tensor(masks))
         sampler = RandomSampler(dataset) if mode == "train" else SequentialSampler(dataset)
         batch_size = cf.train_bs if mode == "train" else cf.eval_bs

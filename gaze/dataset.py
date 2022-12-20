@@ -119,14 +119,14 @@ class GazeDataset():
         tokens in the positions of the subtokens, and pads the targets with the pad token.
         """
         LOGGER.info(f"Padding targets")
-        targets = [np.full((len(i), self.d_out), self.target_pad) for i in self.text_inputs]
+        targets = [np.full((len(i), self.d_out), self.target_pad, dtype=np.float16) for i in self.text_inputs]
         for k, (i, j) in enumerate(zip(self.targets, self.maps)):
             targets[k][j, :] = i
 
         target_pad_vector = np.full((1, self.d_out), self.target_pad)
         targets = [np.concatenate((target_pad_vector, i, target_pad_vector)) for i in targets]
 
-        self.targets = pad_sequences(targets, value=self.target_pad, padding="post")
+        self.targets = pad_sequences(targets, value=self.target_pad, padding="post", dtype="float16")
 
     def calc_numpy(self):
         LOGGER.info(f"Calculating numpy arrays")

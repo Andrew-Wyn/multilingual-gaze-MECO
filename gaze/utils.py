@@ -3,6 +3,7 @@ import torch
 import logging.config
 import json
 from sklearn.preprocessing import MinMaxScaler
+import numpy as np
 
 
 CONFIG = {
@@ -121,16 +122,40 @@ class GazePredictionLoss:
         return losses
 
 
-def minMaxScaling(train_targets, test_targets=None, feature_max=1):   
-    features = train_targets
+def minMaxScaling(train_targets, test_targets=None, feature_max=1, pad_token=-1):
+    # generate train set for the scaler.
     scaler = MinMaxScaler(feature_range=[0, feature_max])
-    flat_features = [j for i in features for j in i]
+
+    flat_features = []
+    for sentence_taget in train_targets:
+        for token_target in sentence_taget:
+            if np.all(token_target != pad_token):
+                flat_features.append(token_target)
+
     scaler.fit(flat_features)
 
-    train_targets = [list(scaler.transform(i)) for i in features]
-    
+    train_targets_ret = []
+
+    for sentence_taget in train_targets:
+        train_sentence_target_ret = []
+        for token_target in sentence_taget:
+            if np.all(token_target != pad_token):
+                train_sentence_target_ret.append(scaler.transform([token_target])[0])
+            else:
+                train_sentence_target_ret.append(token_target)
+        train_targets_ret.append(train_sentence_target_ret)
+
     if not test_targets is None:
-        test_targets = [list(scaler.transform(i)) for i in test_targets]
-        return train_targets, test_targets
-    
-    return train_targets
+        test_targets_ret = []
+        for sentence_taget in test_targets:
+            test_sentence_target_ret = []
+            for token_target in sentence_taget:
+                if np.all(token_target != pad_token):
+                    test_sentence_target_ret.append(scaler.transform([token_target])[0])
+                else:
+                    test_sentence_target_ret.append(token_target)
+            test_targets_ret.append(test_sentence_target_ret)
+
+        return train_targets_ret, test_targets_ret
+
+    return train_targets_ret

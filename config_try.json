@@ -11,7 +11,7 @@
   "full_finetuning": false,
   "random_weights": false,
   "output_dir": "finetuning_dir",
-  "dataset": "datasets/it/all_mean_dataset.csv",
+  "dataset": "data/datasets/it/all_mean_dataset.csv",
   "used_feature": null,
   "k_folds": 10
 }

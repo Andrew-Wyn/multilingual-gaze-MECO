@@ -59,7 +59,7 @@ def main():
     d.randomize_data()
 
     # 10-fold cross-validation
-    """
+
     train_losses, test_losses = cross_validation(cf, d, writer, DEVICE, k_folds=cf.k_folds)
 
     print("Train losses:")
@@ -67,7 +67,6 @@ def main():
 
     print("Test Losses:")
     print(test_losses)
-    """
 
     # retrain over all dataset
 

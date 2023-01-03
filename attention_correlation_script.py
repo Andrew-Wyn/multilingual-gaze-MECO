@@ -53,21 +53,6 @@ def _list_to_dicts(attention_list_layers, target_list_layers, num_hidden_layers)
     return return_dict_attns, return_dict_target
 
 
-def _get_dataset(cf, tokenizer, path):
-    modes = ["train", "valid", "test"]
-
-    # Dataset
-    d = GazeDataset(cf, tokenizer, path, "try")
-    d.read_pipeline()
-
-    dataset = []
-
-    for mode in modes:
-        dataset += d.numpy[mode]
-
-    return dataset
-
-
 def load_model_from_hf(tokenClassifier, model_name, pretrained, d_out=8):
     # Model
     LOGGER.info("initiating model:")
@@ -83,15 +68,13 @@ def load_model_from_hf(tokenClassifier, model_name, pretrained, d_out=8):
     return model
 
 
-def create_attention_dataset(cf, tokenizer, model, subwords=False):
+def create_attention_dataset(d, model, subwords=False):
     LOGGER.info(f"Creating Attention Dataset, subwords sum : {subwords}...")
 
-    dataset = _get_dataset(cf, tokenizer, "datasets/all_mean_dataset.csv")
-    
     attention_list_layers = list()
     target_list_layers = list()
 
-    for input, target, mask in tqdm(dataset):
+    for input, target, mask in tqdm(list(zip(d.text_inputs, d.targets, d.masks))[:3]):
         with torch.no_grad():
             model_output = model(input_ids=torch.as_tensor([input]), attention_mask=torch.as_tensor([mask]))
 
@@ -181,7 +164,6 @@ class AttentionRollout():
 
     def compute_joint_attention(self, att_mat):
         res_att_mat = att_mat
-        # res_att_mat = res_att_mat[4:10, :, :]
         joint_attentions = np.zeros(res_att_mat.shape)
         layers = joint_attentions.shape[0]
         joint_attentions[0] = res_att_mat[0]
@@ -191,17 +173,15 @@ class AttentionRollout():
         return joint_attentions
 
 
-def create_globenc_dataset(cf, tokenizer, model, subwords=False):
+def create_globenc_dataset(d, model, subwords=False):
     LOGGER.info(f"Creating GlobEnc Dataset, subwords sum : {subwords}...")
-
-    dataset = _get_dataset(cf, tokenizer, "datasets/all_mean_dataset.csv")
     
     attention_list_layers = list()
     target_list_layers = list()
 
     print(model.config.num_hidden_layers)
 
-    for input, target, mask in tqdm(dataset[:3]):
+    for input, target, mask in tqdm(list(zip(d.text_inputs, d.targets, d.masks))[:3]):
         # demo GLOBENC
         with torch.no_grad():
             _, attentions, norms = model(input_ids=torch.as_tensor([input]), attention_mask=torch.as_tensor([mask]), output_norms=True, return_dict=False)
@@ -294,46 +274,25 @@ def compute_correlations(dict_attns, dict_target, num_layers, num_features=8):
 
     return correlations
 
-def main():
-    parser = argparse.ArgumentParser(description='Regression Probing')
-    parser.add_argument('-m' ,'--model', dest='model_name', action='store',
-                        help=f' of the model to retrieve from the HF repository')
-    parser.add_argument('-d' ,'--model_dir', dest='model_dir', action='store',
-                        help=f'Relative path of the pretrained model')
-    parser.add_argument('-o' ,'--output_dir', dest='output_dir', action='store',
-                    help=f'Relative path of the probing output')
-    parser.add_argument('-l' ,'--linear', dest='linear', action=argparse.BooleanOptionalAction,
-                    help=f'If apply linear model, default False')
-    parser.add_argument('-a' ,'--average', dest='average', action=argparse.BooleanOptionalAction,
-                    help=f'If apply average over the subtokens')
-    parser.add_argument('-e' ,'--encode_attention', dest='encode_attention', action=argparse.BooleanOptionalAction,
-                    help=f'If apply attention rollout with GlobEnc')
-    parser.add_argument('-p' ,'--pretrained', dest='pretrained', action=argparse.BooleanOptionalAction,
-                        help=f'If needed a pretrained model')
-    parser.add_argument('-f' ,'--finetuned', dest='finetuned', action=argparse.BooleanOptionalAction,
-                        help=f'If needed a finetuned model')
-    parser.add_argument('-x' ,'--xlm', dest='xlm', action=argparse.BooleanOptionalAction,
-                        help=f'If using xlm-roberta')
-    parser.add_argument('-c' ,'--config', dest='config_file', action='store',
-                        help=f'Relative path of a .json file, that contain parameters for the fine-tune script \
-                            {{ \
-                                "feature_max": int, \
-                            }}')
 
+def main():
+    parser = argparse.ArgumentParser(description='Fine-tune a XLM-Roberta-base following config json passed')
+    parser.add_argument('-c' ,'--config', dest='config_file', action='store',
+                        help=f'Relative path of a .json file, that contain parameters for the fine-tune script')
 
     args = parser.parse_args()
-
-    pretrained = args.pretrained
-    finetuned = args.finetuned
-    model_name = args.model_name
-    model_dir = args.model_dir
-    output_dir = args.output_dir
-    average = args.average
-    encode_attention = args.encode_attention
     config_file = args.config_file
-    xlm = args.xlm
 
     cf = Config.load_json(config_file)
+
+    pretrained = cf.pretrained
+    finetuned = cf.finetuned
+    model_name = cf.model_name
+    model_dir = cf.model_dir
+    output_dir = cf.output_dir
+    average = cf.average
+    encode_attention = cf.encode_attention
+    xlm = cf.xlm
 
     # Tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=CACHE_DIR)
@@ -353,10 +312,15 @@ def main():
 
     LOGGER.info(f"The loaded model has {model.config.num_hidden_layers} layers")
 
+    # Dataset
+    d = GazeDataset(cf, tokenizer, cf.dataset)
+    d.read_pipeline()
+    d.randomize_data()
+
     if encode_attention:
-        dict_attns, dict_target = create_globenc_dataset(cf, tokenizer, model, average)
+        dict_attns, dict_target = create_globenc_dataset(d, model, average)
     else:
-        dict_attns, dict_target = create_attention_dataset(cf, tokenizer, model, average)
+        dict_attns, dict_target = create_attention_dataset(d, model, average)
 
     correlations = compute_correlations(dict_attns, dict_target, model.config.num_hidden_layers)
 

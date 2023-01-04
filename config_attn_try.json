@@ -8,6 +8,5 @@
     "average" : false,
     "encode_attention" : false,
     "xlm" : false,
-    "used_feature" : "prob_skip",
-    "feature_max" : null
+    "used_feature" : "prob_skip"
 }

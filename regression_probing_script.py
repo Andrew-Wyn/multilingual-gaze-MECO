@@ -31,7 +31,6 @@ from transformers import (
     # set_seed,
 )
 
-from modeling.custom_bert import BertForTokenClassification
 
 # TODO: capire perche se non setto cache_dir in AutoTokenizer
 # non usa come cache la directory specificata
@@ -194,7 +193,7 @@ def load_model_from_hf(model_name, pretrained, d_out=8):
         model = AutoModelForTokenClassification.from_config(config)
     else:
         LOGGER.info("Take pretrained model:")
-        model = BertForTokenClassification.from_pretrained(model_name, num_labels=d_out,
+        model = AutoModelForTokenClassification.from_pretrained(model_name, num_labels=d_out,
                             output_attentions=False, output_hidden_states=True)
 
     return model
@@ -222,11 +221,11 @@ def main():
 
     if not cf.finetuned: # downaload from huggingface
         LOGGER.info("Model retrieving, download from hf...")
-        model = load_model_from_hf(cf.model_name, cf.pretrained)
+        model = load_model_from_hf(cf.model_name, cf.pretrained, d.d_out)
 
     else: # load from disk
         LOGGER.info("Model retrieving, load from disk...")
-        model = BertForTokenClassification.from_pretrained(cf.model_dir, output_attentions=False, output_hidden_states=True)
+        model = AutoModelForTokenClassification.from_pretrained(cf.model_dir, output_attentions=False, output_hidden_states=True)
     
     LOGGER.info("Model retrieved !")
 

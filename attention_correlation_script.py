@@ -250,6 +250,30 @@ def create_globenc_dataset(d, model, subwords=False):
     return _list_to_dicts(attention_list_layers, target_list_layers, model.config.num_hidden_layers)
 
 
+def create_dataset(d, model, encode_attention, subwords=False):
+
+    # the dicts returned by create dataset features are in in the following form:
+    # dict_target:
+    # {
+    #   i : [... [np.array(...)] ...] ->    first list contains dataset samples number elements, 
+    #                                       second list contains num_features np.array
+    #   ... for i in layers ...
+    # }
+    # dict_attns:
+    # {
+    #   i : [... np.array(...) ...] ->  first list contains dataset samples number elements, 
+    #                                   contain the attention of the model to each input token.
+    #   ... for i in layers ...
+    # }
+
+    if encode_attention:
+        dict_attns, dict_target = create_globenc_dataset(d, model, subwords)
+    else:
+        dict_attns, dict_target = create_attention_dataset(d, model, subwords)
+
+    return dict_attns, dict_target
+
+
 def compute_spearman_correlation(attns, targets):
     spearman_correlations = list()
 
@@ -262,7 +286,7 @@ def compute_spearman_correlation(attns, targets):
     return np.mean(spearman_correlations)
 
 
-def compute_correlations(dict_attns, dict_target, num_layers, num_features=8):
+def compute_correlations(dict_attns, dict_target, num_layers, num_features):
     correlations = dict()
 
     for feat in range(num_features):
@@ -297,14 +321,20 @@ def main():
     # Tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=CACHE_DIR)
 
+    # to use GlobEnc need to import models from modelling module.
     if xlm:
         tokenClassifier = XLMRobertaForTokenClassification
     else:
         tokenClassifier = BertForTokenClassification
 
+    # Dataset
+    d = GazeDataset(cf, tokenizer, cf.dataset)
+    d.read_pipeline()
+    d.randomize_data()
+
     if not finetuned: # downaload from huggingface
         print("download from hf")
-        model = load_model_from_hf(tokenClassifier, model_name, pretrained)
+        model = load_model_from_hf(tokenClassifier, model_name, pretrained, d.d_out)
 
     else: # load from disk
         print("load from disk")
@@ -312,17 +342,9 @@ def main():
 
     LOGGER.info(f"The loaded model has {model.config.num_hidden_layers} layers")
 
-    # Dataset
-    d = GazeDataset(cf, tokenizer, cf.dataset)
-    d.read_pipeline()
-    d.randomize_data()
+    dict_attns, dict_target = create_dataset(d, model, encode_attention, average)
 
-    if encode_attention:
-        dict_attns, dict_target = create_globenc_dataset(d, model, average)
-    else:
-        dict_attns, dict_target = create_attention_dataset(d, model, average)
-
-    correlations = compute_correlations(dict_attns, dict_target, model.config.num_hidden_layers)
+    correlations = compute_correlations(dict_attns, dict_target, model.config.num_hidden_layers, d.d_out)
 
     if encode_attention:
         to_print = {"GlobEnc": correlations}

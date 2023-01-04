@@ -18,7 +18,7 @@ class GazeDataset():
         self.maps = []  # split mappings between tokens and original words
         self.numpy = []  # split numpy arrays, ready for the model
 
-        self.feature_max = cf.feature_max  # gaze features will be standardized between 0 and self.feature_max
+        self.feature_max = cf.feature_max if "feature_max" in cf.__dict__ else None  # gaze features will be standardized between 0 and self.feature_max
 
     def tokenize_and_map(self, sentence):
         """

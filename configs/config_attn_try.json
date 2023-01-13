@@ -5,8 +5,8 @@
     "pretrained" : false,
     "finetuned" : false,
     "dataset": "data/datasets/it/all_mean_dataset.csv",
-    "average" : false,
-    "encode_attention" : false,
+    "average" : true,
+    "encode_attention" : true,
     "xlm" : false,
-    "used_feature" : "prob_skip"
+    "used_feature" : null
 }

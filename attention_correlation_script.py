@@ -37,22 +37,6 @@ CACHE_DIR = f"{os.getcwd()}/.hf_cache/"
 os.environ['TRANSFORMERS_CACHE'] = CACHE_DIR
 
 
-def _list_to_dicts(attention_list_layers, target_list_layers, num_hidden_layers):
-    # transform datasets, from list of dicts to dict of lists
-    return_dict_attns = dict()
-    return_dict_target = dict()
-    for layer in range(num_hidden_layers):
-        return_dict_attns[layer] = list()
-        return_dict_target[layer] = list()
-    
-    for attention_dict, target_dict in zip(attention_list_layers, target_list_layers):
-        for layer in range(num_hidden_layers):
-            return_dict_attns[layer].append(attention_dict[layer])
-            return_dict_target[layer].append(target_dict[layer])
-
-    return return_dict_attns, return_dict_target
-
-
 def load_model_from_hf(tokenClassifier, model_name, pretrained, d_out=8):
     # Model
     LOGGER.info("initiating model:")
@@ -66,83 +50,6 @@ def load_model_from_hf(tokenClassifier, model_name, pretrained, d_out=8):
         #print(model.classifier.weight.data)
 
     return model
-
-
-def create_attention_dataset(d, model, subwords=False):
-    LOGGER.info(f"Creating Attention Dataset, subwords sum : {subwords}...")
-
-    attention_list_layers = list()
-    target_list_layers = list()
-
-    for input, target, mask in tqdm(list(zip(d.text_inputs, d.targets, d.masks))[:3]):
-        with torch.no_grad():
-            model_output = model(input_ids=torch.as_tensor([input]), attention_mask=torch.as_tensor([mask]))
-
-        attention_dict = dict()
-        target_dict = dict()
-
-        for layer, attention_layer in enumerate(model_output.attentions):
-            # We use the first element of the batch because batch size is 1
-            attention = attention_layer[0].numpy()
-
-            non_padded_ids = np.where(mask == 1)[0]
-
-            # 1. We take the mean over the 12 attention heads (like Abnar & Zuidema 2020)
-            # I also tried the sum once, but the result was even worse
-            mean_attention = np.mean(attention, axis=0)
-
-            # We drop padded tokens
-            # mean_attention = mean_attention[non_padded_ids]
-
-            # We drop CLS and SEP tokens
-            mean_attention = mean_attention[1:-1]
-
-            # 2. For each word, we sum over the attention to the other words to determine relative importance
-            sum_attention = np.sum(mean_attention, axis=0)
-
-            sum_attention = sum_attention[non_padded_ids]
-
-            first_token_ids = np.where(np.multiply.reduce(target[non_padded_ids] != -1, 1) > 0)[0]
-
-            # merge subwords 
-            if not subwords:
-                # take the attention of only the first token of a word
-                sum_attention = sum_attention[first_token_ids]
-            else:
-                # take the sum of the subwords's attention for a given word
-                # id of the words's start
-                attns = [np.sum(split_) for split_ in np.split(sum_attention, first_token_ids, 0)[1:-1]]
-                # the last have sum all the attention from the last non masked to the sep token (sep token is the last 1 in mask)
-                last_sum = np.sum(sum_attention[first_token_ids[-1] : non_padded_ids[-1]], 0)
-                attns.append(last_sum)
-
-                sum_attention = np.array(attns)
-
-            # Taking the softmax does not make a difference for calculating correlation
-            # It can be useful to scale the salience signal to the same range as the human attention
-            relative_attention = scipy.special.softmax(sum_attention)
-
-            attention_dict[layer] = relative_attention
-
-            word_targets = target[first_token_ids]
-
-            # normalize features between [0,1]
-            sum_features = np.sum(word_targets, axis=0)
-
-            normalized_features = word_targets / sum_features
-
-            # avoid division by 0 in the normalization of a full zero row
-            normalized_features[np.isnan(normalized_features)] = 0
-
-            target_dict[layer] = list()
-
-            for feat_i in range(normalized_features.shape[1]):
-                target_dict[layer].append(normalized_features[:, feat_i])
-
-        attention_list_layers.append(attention_dict)
-        target_list_layers.append(target_dict)
-
-    return _list_to_dicts(attention_list_layers, target_list_layers, model.config.num_hidden_layers)
 
 
 class AttentionRollout():
@@ -173,16 +80,106 @@ class AttentionRollout():
         return joint_attentions
 
 
-def create_globenc_dataset(d, model, subwords=False):
-    LOGGER.info(f"Creating GlobEnc Dataset, subwords sum : {subwords}...")
-    
-    attention_list_layers = list()
-    target_list_layers = list()
+def handle_subwords(tokenwise_enc, first_token_ids, non_padded_ids, subwords):
+    # merge subwords 
+    if not subwords:
+        # take the attention of only the first token of a word
+        tokenwise_enc = tokenwise_enc[first_token_ids]
+    else:
+        # take the sum of the subwords's attention for a given word
+        # id of the words's start
+        attns = [np.sum(split_) for split_ in np.split(tokenwise_enc, first_token_ids, 0)[1:-1]]
+        # the last have sum all the attention from the last non masked to the sep token (sep token is the last 1 in mask)
+        last_sum = np.sum(tokenwise_enc[first_token_ids[-1] : non_padded_ids[-1]], 0)
+        attns.append(last_sum)
 
-    print(model.config.num_hidden_layers)
+        tokenwise_enc = np.array(attns)
+
+    return tokenwise_enc
+
+
+def mean_corrs(corr_dict):
+    for l, feats in corr_dict.items():
+        for f, corrs_list in feats.items():
+            corr_dict[l][f] = np.mean(corrs_list)
+
+    return corr_dict
+
+
+def attention_correlations(d, model, subwords=False):
+    LOGGER.info(f"Creating Attention Dataset, subwords sum : {subwords}...")
+
+    corr_dict = dict()
+
+    for i_layer in range(model.config.num_hidden_layers):
+        corr_dict[i_layer] = dict() # for each layer i will put a dict that will contain an element for each feature
+        for i_feature in range(model.num_labels):
+            corr_dict[i_layer][i_feature] = [] # for each feature i will save a list of correlations over wich i will do a mean
 
     for input, target, mask in tqdm(list(zip(d.text_inputs, d.targets, d.masks))[:3]):
-        # demo GLOBENC
+        with torch.no_grad():
+            model_output = model(input_ids=torch.as_tensor([input]), attention_mask=torch.as_tensor([mask]))
+
+        for layer, attention_layer in enumerate(model_output.attentions):
+            # We use the first element of the batch because batch size is 1
+            attention = attention_layer[0].numpy()
+
+            non_padded_ids = np.where(mask == 1)[0]
+
+            # 1. We take the mean over the 12 attention heads (like Abnar & Zuidema 2020)
+            # I also tried the sum once, but the result was even worse
+            mean_attention = np.mean(attention, axis=0)
+
+            # We drop padded tokens
+            # mean_attention = mean_attention[non_padded_ids]
+
+            # We drop CLS and SEP tokens
+            mean_attention = mean_attention[1:-1]
+
+            # 2. For each word, we sum over the attention to the other words to determine relative importance
+            sum_attention = np.sum(mean_attention, axis=0)
+
+            sum_attention = sum_attention[non_padded_ids]
+
+            first_token_ids = np.where(np.multiply.reduce(target[non_padded_ids] != -1, 1) > 0)[0]
+
+            sum_attention = handle_subwords(sum_attention, first_token_ids, non_padded_ids, subwords)
+
+            # Taking the softmax does not make a difference for calculating correlation
+            # It can be useful to scale the salience signal to the same range as the human attention
+            relative_attention = scipy.special.softmax(sum_attention)
+
+            word_targets = target[first_token_ids]
+
+            # normalize features between [0,1]
+            sum_features = np.sum(word_targets, axis=0)
+
+            normalized_features = word_targets / sum_features
+
+            # avoid division by 0 in the normalization of a full zero row
+            normalized_features[np.isnan(normalized_features)] = 0
+
+            for feat_i in range(normalized_features.shape[1]):
+                sample_spearman_corr = spearmanr(relative_attention, normalized_features[:, feat_i])[0]
+                # sometimes the spearmanr can return nan in case attn or targ has std = 0
+                if not sample_spearman_corr is np.nan:
+                    corr_dict[layer][feat_i].append(sample_spearman_corr)
+
+    return mean_corrs(corr_dict)
+
+
+def globenc_correlations(d, model, subwords=False):
+    LOGGER.info(f"Creating GlobEnc Dataset, subwords sum : {subwords}...")
+    
+    corr_dict = dict() # an entry for each layer
+
+    for i_layer in range(model.config.num_hidden_layers):
+        corr_dict[i_layer] = dict() # for each layer i will put a dict that will contain an element for each feature
+        for i_feature in range(model.num_labels):
+            corr_dict[i_layer][i_feature] = [] # for each feature i will save a list of correlations over wich i will do a mean
+
+    for input, target, mask in tqdm(list(zip(d.text_inputs, d.targets, d.masks))[:3]):
+        # ---- GLOBENC
         with torch.no_grad():
             _, attentions, norms = model(input_ids=torch.as_tensor([input]), attention_mask=torch.as_tensor([mask]), output_norms=True, return_dict=False)
 
@@ -193,8 +190,7 @@ def create_globenc_dataset(d, model, subwords=False):
         globenc = AttentionRollout().compute_flows([norm_nenc], output_hidden_states=True)[0]
         globenc = np.array(globenc)
 
-        attention_dict = dict()
-        target_dict = dict()
+        # ----
 
         for layer, enc in enumerate(globenc):
             non_padded_ids = np.where(mask == 1)[0]
@@ -209,25 +205,11 @@ def create_globenc_dataset(d, model, subwords=False):
 
             first_token_ids = np.where(np.multiply.reduce(target[non_padded_ids] != -1, 1) > 0)[0]
 
-            # merge subwords 
-            if not subwords:
-                # take the attention of only the first token of a word
-                sum_enc = sum_enc[first_token_ids]
-            else:
-                # take the sum of the subwords's attention for a given word
-                # id of the words's start
-                attns = [np.sum(split_) for split_ in np.split(sum_enc, first_token_ids, 0)[1:-1]]
-                # the last have sum all the attention from the last non masked to the sep token (sep token is the last 1 in mask)
-                last_sum = np.sum(sum_enc[first_token_ids[-1] : non_padded_ids[-1]], 0)
-                attns.append(last_sum)
-
-                sum_enc = np.array(attns)
+            sum_enc = handle_subwords(sum_enc, first_token_ids, non_padded_ids, subwords)
 
             # Taking the softmax does not make a difference for calculating correlation
             # It can be useful to scale the salience signal to the same range as the human attention
             relative_enc = scipy.special.softmax(sum_enc)
-
-            attention_dict[layer] = relative_enc
 
             word_targets = target[first_token_ids]
 
@@ -239,64 +221,13 @@ def create_globenc_dataset(d, model, subwords=False):
             # avoid division by 0 in the normalization of a full zero row
             normalized_features[np.isnan(normalized_features)] = 0
 
-            target_dict[layer] = list()
-
             for feat_i in range(normalized_features.shape[1]):
-                target_dict[layer].append(normalized_features[:, feat_i])
-                
-        attention_list_layers.append(attention_dict)
-        target_list_layers.append(target_dict)
+                sample_spearman_corr = spearmanr(relative_enc, normalized_features[:, feat_i])[0]
+                # sometimes the spearmanr can return nan in case attn or targ has std = 0
+                if not sample_spearman_corr is np.nan:
+                    corr_dict[layer][feat_i].append(sample_spearman_corr)
 
-    return _list_to_dicts(attention_list_layers, target_list_layers, model.config.num_hidden_layers)
-
-
-def create_dataset(d, model, encode_attention, subwords=False):
-
-    # the dicts returned by create dataset features are in in the following form:
-    # dict_target:
-    # {
-    #   i : [... [np.array(...)] ...] ->    first list contains dataset samples number elements, 
-    #                                       second list contains num_features np.array
-    #   ... for i in layers ...
-    # }
-    # dict_attns:
-    # {
-    #   i : [... np.array(...) ...] ->  first list contains dataset samples number elements, 
-    #                                   contain the attention of the model to each input token.
-    #   ... for i in layers ...
-    # }
-
-    if encode_attention:
-        dict_attns, dict_target = create_globenc_dataset(d, model, subwords)
-    else:
-        dict_attns, dict_target = create_attention_dataset(d, model, subwords)
-
-    return dict_attns, dict_target
-
-
-def compute_spearman_correlation(attns, targets):
-    spearman_correlations = list()
-
-    for attn, targ in zip(attns, targets):
-        sample_spearman_corr = spearmanr(attn, targ)[0]
-        # sometimes the spearmanr can return nan in case attn or targ has std = 0
-        if not sample_spearman_corr is np.nan:
-            spearman_correlations.append(sample_spearman_corr)
-
-    return np.mean(spearman_correlations)
-
-
-def compute_correlations(dict_attns, dict_target, num_layers, num_features):
-    correlations = dict()
-
-    for feat in range(num_features):
-        correlations[feat] = dict()
-        for layer in range(num_layers):
-            layer_target_feature = [targets[feat] for targets in dict_target[layer]]
-            layer_attns = dict_attns[layer]
-            correlations[feat][layer] = compute_spearman_correlation(layer_attns, layer_target_feature)
-
-    return correlations
+    return mean_corrs(corr_dict)
 
 
 def main():
@@ -342,16 +273,14 @@ def main():
 
     LOGGER.info(f"The loaded model has {model.config.num_hidden_layers} layers")
 
-    dict_attns, dict_target = create_dataset(d, model, encode_attention, average)
-
-    correlations = compute_correlations(dict_attns, dict_target, model.config.num_hidden_layers, d.d_out)
-
     if encode_attention:
+        correlations = globenc_correlations(d, model, average)
         to_print = {"GlobEnc": correlations}
     else:
+        correlations = attention_correlations(d, model, average)
         to_print = {"Attentions": correlations}
 
-    with open(f"{output_dir}/corrs_results_{datetime.datetime.now().time()}.json", 'w') as f:
+    with open(f"{output_dir}/corrs_results_{datetime.datetime.now()}.json", 'w') as f:
         json.dump(to_print, f)
 
 

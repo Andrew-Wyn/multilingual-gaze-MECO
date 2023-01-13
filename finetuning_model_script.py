@@ -3,7 +3,7 @@ from gaze.utils import Config
 from gaze.trainer import cross_validation
 import torch
 from sklearn.utils import shuffle
-from gaze.utils import LOGGER, create_finetuning_optimizer, create_scheduler, randomize_model, Config, minMaxScaling
+from gaze.utils import LOGGER, create_finetuning_optimizer, create_scheduler, randomize_model, Config, minMaxScaling, load_model_from_hf
 from modeling.custom_bert import BertForTokenClassification
 from gaze.dataloader import GazeDataLoader
 from sklearn.preprocessing import MinMaxScaler
@@ -76,18 +76,8 @@ def main():
     # create the dataloader
     train_dl = GazeDataLoader(cf, d.text_inputs, d.targets, d.masks, d.target_pad, mode="train")
 
-    # Model
-    LOGGER.info("initiating model:")
-    if cf.random_weights:
-        # initiate model with random weights
-        LOGGER.info("Take randomized model:")
-        config = AutoConfig.from_pretrained(cf.model_name, num_labels=d.d_out,
-                                    output_attentions=False, output_hidden_states=False)
-        model = AutoModelForTokenClassification.from_config(config)
-    else:
-        LOGGER.info("Take pretrained model:")
-        model = BertForTokenClassification.from_pretrained(cf.model_name, num_labels=d.d_out,
-                            output_attentions=False, output_hidden_states=False)
+    # model
+    model = load_model_from_hf(cf.model_name, not cf.random_weights, d.d_out)
 
     # optimizer
     optim = create_finetuning_optimizer(cf, model)

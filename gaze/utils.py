@@ -4,6 +4,19 @@ import logging.config
 import json
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
+from transformers import (
+    AutoConfig,
+    AutoModelForTokenClassification,
+    AutoTokenizer,
+    # DataCollatorWithPadding,
+    # EvalPrediction,
+    # HfArgumentParser,
+    # PretrainedConfig,
+    # Trainer,
+    # TrainingArguments,
+    # default_data_collator,
+    # set_seed,
+)
 
 
 CONFIG = {
@@ -159,3 +172,20 @@ def minMaxScaling(train_targets, test_targets=None, feature_max=1, pad_token=-1)
         return train_targets_ret, test_targets_ret
 
     return train_targets_ret
+
+
+def load_model_from_hf(model_name, pretrained, d_out=8):
+    # Model
+    LOGGER.info("Initiating model ...")
+    if not pretrained:
+        # initiate model with random weights
+        LOGGER.info("Take randomized model:")
+        config = AutoConfig.from_pretrained(model_name, num_labels=d_out,
+                                    output_attentions=False, output_hidden_states=True)
+        model = AutoModelForTokenClassification.from_config(config)
+    else:
+        LOGGER.info("Take pretrained model:")
+        model = AutoModelForTokenClassification.from_pretrained(model_name, num_labels=d_out,
+                            output_attentions=False, output_hidden_states=True)
+
+    return model

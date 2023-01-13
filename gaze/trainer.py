@@ -7,7 +7,7 @@ from collections import defaultdict
 from abc import ABC, abstractmethod
 from gaze.tester import GazeTester
 from gaze.utils import LOGGER, mask_mse_loss
-from gaze.utils import LOGGER, create_finetuning_optimizer, create_scheduler, randomize_model, minMaxScaling
+from gaze.utils import LOGGER, create_finetuning_optimizer, create_scheduler, randomize_model, minMaxScaling, load_model_from_hf
 from modeling.custom_bert import BertForTokenClassification
 from gaze.dataloader import GazeDataLoader
 
@@ -155,17 +155,7 @@ def cross_validation(cf, d, writer, DEVICE, k_folds=10):
         test_dl = GazeDataLoader(cf, test_inputs, test_targets, test_masks, d.target_pad, mode="test")
 
         # Model
-        LOGGER.info("initiating model:")
-        if cf.random_weights:
-            LOGGER.info("Take randomized model:")
-            # initiate model with random weights
-            config = AutoConfig.from_pretrained(cf.model_name, num_labels=d.d_out,
-                                        output_attentions=False, output_hidden_states=False)
-            model = AutoModelForTokenClassification.from_config(config)
-        else:
-            LOGGER.info("Take pretrained model:")
-            model = BertForTokenClassification.from_pretrained(cf.model_name, num_labels=d.d_out,
-                                output_attentions=False, output_hidden_states=False)
+        model = load_model_from_hf(cf.model_name, not cf.random_weights, d.d_out)
 
         # optimizer
         optim = create_finetuning_optimizer(cf, model)

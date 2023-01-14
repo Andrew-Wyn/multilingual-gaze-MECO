@@ -6,7 +6,7 @@
     "finetuned" : false,
     "dataset": "data/datasets/it/all_mean_dataset.csv",
     "average" : true,
-    "encode_attention" : true,
+    "encode_attention" : false,
     "xlm" : false,
     "used_feature" : null
 }

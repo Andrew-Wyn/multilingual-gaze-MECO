@@ -5,7 +5,7 @@ import os
 
 from gaze.dataset import GazeDataset
 from gaze.utils import LOGGER, randomize_model, Config
-from gaze.correlation import AttentionCorrelation, GLOBENCCorrelation
+from gaze.correlation import AttentionCorrelation, GLOBENCCorrelation, ALTICorrelation
 
 from transformers import (
     # AutoConfig,
@@ -33,11 +33,11 @@ os.environ['TRANSFORMERS_CACHE'] = CACHE_DIR
 
 # different definition with respect to the one in utils.py, this implementation has
 # another parameter (tokenClassifier) needed since it will load a custom version of NLM.
-def load_model_from_hf(tokenClassifier, model_name, pretrained, d_out=8):
+def load_model_from_hf(tokenClassifier, model_name, pretrained, output_hidden_states, d_out=8):
     # Model
     LOGGER.info("initiating model:")
     model = tokenClassifier.from_pretrained(model_name, num_labels=d_out,
-                                    output_attentions=True, output_hidden_states=False)
+                                    output_attentions=True, output_hidden_states=output_hidden_states)
 
     if not pretrained:
         # initiate Bert with random weights
@@ -66,6 +66,7 @@ def main():
     average = cf.average
     encode_attention = cf.encode_attention
     xlm = cf.xlm
+    output_hidden_states = cf.output_hidden_states
 
     # Tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=CACHE_DIR)
@@ -83,22 +84,30 @@ def main():
 
     if not finetuned: # downaload from huggingface
         print("download from hf")
-        model = load_model_from_hf(tokenClassifier, model_name, pretrained, d.d_out)
+        model = load_model_from_hf(tokenClassifier, model_name, pretrained, output_hidden_states, d.d_out)
 
     else: # load from disk
         print("load from disk")
-        model = tokenClassifier.from_pretrained(model_dir, output_attentions=True, output_hidden_states=False)
+        model = tokenClassifier.from_pretrained(model_dir, output_attentions=True, output_hidden_states=output_hidden_states)
 
     LOGGER.info(f"The loaded model has {model.config.num_hidden_layers} layers")
 
-    if encode_attention:
-        corr = GLOBENCCorrelation(d, model, average)
-        correlations = corr.compute_correlations()
-        to_print = {"GlobEnc": correlations}
-    else:
+    to_print = None
+
+    if encode_attention == "attention":
         corr = AttentionCorrelation(d, model, average)
         correlations = corr.compute_correlations()
         to_print = {"Attentions": correlations}
+    elif encode_attention == "globenc":
+        corr = GLOBENCCorrelation(d, model, average)
+        correlations = corr.compute_correlations()
+        to_print = {"GlobEnc": correlations}
+    elif encode_attention == "alti":
+        corr = ALTICorrelation(d, model, average)
+        correlations = corr.compute_correlations()
+        to_print = {"ALTI": correlations}
+    else:
+        raise RuntimeError("encode_attention has to be 'attention' or 'globenc' or 'alti'")
 
     with open(f"{output_dir}/corrs_results_{datetime.datetime.now()}.json", 'w') as f:
         json.dump(to_print, f)

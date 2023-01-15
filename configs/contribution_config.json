@@ -1,0 +1,12 @@
+{
+    "models" : {
+        "bert": {
+            "layer": "bert.encoder.layer",
+            "ln1": "attention.output.LayerNorm",
+            "ln2": "output.LayerNorm",
+            "values": "attention.self.value",
+            "dense": "attention.output.dense",
+            "pre_layer_norm": false
+        }
+    }
+}

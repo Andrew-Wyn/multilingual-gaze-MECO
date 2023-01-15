@@ -7,8 +7,8 @@ from abc import ABC, abstractmethod
 
 from scipy.stats import spearmanr
 
-from gaze.utils import LOGGER
-
+from gaze.utils import LOGGER, normalize_contributions
+from modeling.model_wrapper_alti import ModelWrapper
 
 class AttentionRollout():
     def compute_flows(self, attentions_list, desc="", output_hidden_states=False, disable_tqdm=False):
@@ -73,7 +73,7 @@ class Correlation(ABC):
         pass
 
     def compute_correlations(self):
-        LOGGER.info(f"Creating GlobEnc Dataset, subwords sum : {self.subwords}...")
+        LOGGER.info(f"Creating Dataset, subwords sum : {self.subwords}...")
         
         corr_dict = dict() # an entry for each layer
 
@@ -148,9 +148,8 @@ class AttentionCorrelation(Correlation):
             sum_attention = np.sum(mean_attention, axis=0)
 
             importance_list.append(sum_attention)
-
         # ----
-        
+
         return importance_list
 
 
@@ -174,6 +173,40 @@ class GLOBENCCorrelation(Correlation):
 
         # once created the encoding, compress the encoding to have a vector for each sentence
         for enc in globenc:
+            # We drop CLS and SEP tokens
+            enc = enc[1:-1]
+
+            # 2. For each word, we sum over the rollout to the other words to determine relative importance
+            sum_enc = np.sum(enc, axis=0)
+
+            importance_list.append(sum_enc)
+
+        # ----
+
+        return importance_list
+
+
+class ALTICorrelation(Correlation):
+    def __init__(self, d, model, subwords=False):
+        super().__init__(d, model, subwords)
+
+    def compute_importance(self, input, mask):
+        # ---- ALTI
+        with torch.no_grad():
+            model_wrapped = ModelWrapper(self.model)
+            _, _, _, contributions_data = model_wrapped(input, mask)
+        
+        resultant_norm = torch.norm(torch.squeeze(contributions_data['resultants']),p=1,dim=-1)
+        normalized_contributions = normalize_contributions(contributions_data['contributions'],scaling='min_sum',resultant_norm=resultant_norm)
+        # Aggregate and compute ALTI
+        normalized_contributions  = normalized_contributions.numpy()
+        alti_enc = AttentionRollout().compute_flows([normalized_contributions], output_hidden_states=True)[0]
+        alti_enc = np.array(alti_enc)
+
+        importance_list = list()
+
+        # once created the encoding, compress the encoding to have a vector for each sentence
+        for enc in alti_enc:
             # We drop CLS and SEP tokens
             enc = enc[1:-1]
 

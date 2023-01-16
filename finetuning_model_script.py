@@ -39,6 +39,10 @@ def main():
     parser = argparse.ArgumentParser(description='Fine-tune a XLM-Roberta-base following config json passed')
     parser.add_argument('-c' ,'--config', dest='config_file', action='store',
                         help=f'Relative path of a .json file, that contain parameters for the fine-tune script')
+    parser.add_argument('-o', '--output-dir', dest='output_dir', action='store',
+                        help=f'Relative path of output directory')
+    parser.add_argument('-d', '--dataset', dest='dataset', action='store',
+                        help=f'Relative path of dataset folder, containing the .csv file')
 
     # Read the script's argumenents
     args = parser.parse_args()
@@ -52,13 +56,13 @@ def main():
         os.makedirs(cf.output_dir)
 
     # Writer
-    writer = SummaryWriter(cf.output_dir)
+    writer = SummaryWriter(args.output_dir)
 
     # Tokenizer
     tokenizer = AutoTokenizer.from_pretrained(cf.model_name, cache_dir=CACHE_DIR)
 
     # Dataset
-    d = GazeDataset(cf, tokenizer, cf.dataset)
+    d = GazeDataset(cf, tokenizer, args.dataset)
     d.read_pipeline()
     d.randomize_data()
 

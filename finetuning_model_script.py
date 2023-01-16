@@ -2,7 +2,8 @@ from gaze.dataset import GazeDataset
 from gaze.utils import Config
 from gaze.trainer import cross_validation
 import torch
-from sklearn.utils import shuffle
+import datetime
+import json
 from gaze.utils import LOGGER, create_finetuning_optimizer, create_scheduler, randomize_model, Config, minMaxScaling, load_model_from_hf
 from modeling.custom_bert import BertForTokenClassification
 from gaze.dataloader import GazeDataLoader
@@ -97,6 +98,14 @@ def main():
     trainer = GazeTrainer(cf, model, train_dl, optim, scheduler, f"Final_Training",
                                 DEVICE, writer=writer)
     trainer.train(save_model=True)
+
+    loss_tr = dict()
+
+    for key, metric in trainer.tester.train_metrics.items():
+        loss_tr[key] = metric
+
+    with open(f"{args.output_dir}/finetuning_results_{datetime.datetime.now()}.json", 'w') as f:
+        json.dump({"losses_tr" : train_losses, "losses_ts" : test_losses, "final_training" : loss_tr}, f)
 
 if __name__ == "__main__":
     main()

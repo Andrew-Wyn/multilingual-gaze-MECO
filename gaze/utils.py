@@ -180,12 +180,12 @@ def load_model_from_hf(model_name, pretrained, d_out=8):
     LOGGER.info("Initiating model ...")
     if not pretrained:
         # initiate model with random weights
-        LOGGER.info("Take randomized model:")
+        LOGGER.info("Take randomized model")
         config = AutoConfig.from_pretrained(model_name, num_labels=d_out,
                                     output_attentions=False, output_hidden_states=True)
         model = AutoModelForTokenClassification.from_config(config)
     else:
-        LOGGER.info("Take pretrained model:")
+        LOGGER.info("Take pretrained model")
         model = AutoModelForTokenClassification.from_pretrained(model_name, num_labels=d_out,
                             output_attentions=False, output_hidden_states=True)
 

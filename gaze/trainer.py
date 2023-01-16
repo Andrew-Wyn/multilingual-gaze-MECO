@@ -55,7 +55,7 @@ class Trainer(ABC):
             for key, metric in self.tester.train_metrics.items():
                 self.writer.add_scalar(f"{self.task}/train/{key}", metric, it // n_batches_one_epoch)
             
-            if not self.tester.test_dl is None:
+            if not self.tester.test_dl is None: 
                 for key, metric in self.tester.test_metrics.items():
                     self.writer.add_scalar(f"{self.task}/test/{key}", metric, it // n_batches_one_epoch)
 

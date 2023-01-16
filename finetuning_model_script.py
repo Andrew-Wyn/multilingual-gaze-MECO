@@ -40,14 +40,18 @@ def main():
     parser.add_argument('-c' ,'--config', dest='config_file', action='store',
                         help=f'Relative path of a .json file, that contain parameters for the fine-tune script')
 
+    # Read the script's argumenents
     args = parser.parse_args()
     config_file = args.config_file
 
+    # Load the .json configuration file
     cf = Config.load_json(config_file)
 
+    # check if the output directory exists, if not create it!
     if not os.path.exists(cf.output_dir):
         os.makedirs(cf.output_dir)
 
+    # Writer
     writer = SummaryWriter(cf.output_dir)
 
     # Tokenizer
@@ -58,17 +62,17 @@ def main():
     d.read_pipeline()
     d.randomize_data()
 
-    # 10-fold cross-validation
-
+    # K-fold cross-validation
+    
     train_losses, test_losses = cross_validation(cf, d, writer, DEVICE, k_folds=cf.k_folds)
 
-    print("Train losses:")
+    print("Train averaged losses:")
     print(train_losses)
 
-    print("Test Losses:")
+    print("Test averaged losses:")
     print(test_losses)
 
-    # retrain over all dataset
+    # Retrain over all dataset
 
     # min max scaler the targets
     d.targets = minMaxScaling(d.targets, feature_max=d.feature_max, pad_token=d.target_pad)
@@ -76,16 +80,16 @@ def main():
     # create the dataloader
     train_dl = GazeDataLoader(cf, d.text_inputs, d.targets, d.masks, d.target_pad, mode="train")
 
-    # model
+    # Model
     model = load_model_from_hf(cf.model_name, not cf.random_weights, d.d_out)
 
-    # optimizer
+    # Optimizer
     optim = create_finetuning_optimizer(cf, model)
 
-    # scheduler
+    # Scheduler
     scheduler = create_scheduler(cf, optim, train_dl)
 
-    # trainer
+    # Trainer
     trainer = GazeTrainer(cf, model, train_dl, optim, scheduler, f"Final_Training",
                                 DEVICE, writer=writer)
     trainer.train(save_model=True)

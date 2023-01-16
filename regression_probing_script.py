@@ -33,30 +33,33 @@ def main():
     parser.add_argument('-c' ,'--config', dest='config_file', action='store',
                         help=f'Relative path of a .json file, that contain parameters for the fine-tune script')
 
+    # Load the script's arguments
     args = parser.parse_args()
 
     config_file = args.config_file
 
+    # Load config file
     cf = Config.load_json(config_file)
 
     # Tokenizer
     tokenizer = AutoTokenizer.from_pretrained(cf.model_name, cache_dir=CACHE_DIR)
 
-    # TODO: LOAD DATASET BEFORE MODEL CREATION
     # Dataset
     d = GazeDataset(cf, tokenizer, cf.dataset)
     d.read_pipeline()
     d.randomize_data()
 
+    LOGGER.info("Read the data!!!")
+
+    # Model
     if not cf.finetuned: # downaload from huggingface
         LOGGER.info("Model retrieving, download from hf...")
         model = load_model_from_hf(cf.model_name, cf.pretrained, d.d_out)
-
     else: # load from disk
         LOGGER.info("Model retrieving, load from disk...")
         model = AutoModelForTokenClassification.from_pretrained(cf.model_dir, output_attentions=False, output_hidden_states=True)
     
-    LOGGER.info("Model retrieved!")
+    LOGGER.info("Model retrieved!!!")
 
     prober = Prober(d, cf.feature_max, cf.output_dir)
 

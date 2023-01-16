@@ -7,7 +7,7 @@ from gaze.utils import LOGGER
 
 class GazeDataset():
     def __init__(self, cf, tokenizer, filename):
-        self.tokenizer = tokenizer  # tokenizer for the BERT model
+        self.tokenizer = tokenizer
         self.filename = filename
         self.used_feature = cf.used_feature
         self.features = []
@@ -69,15 +69,22 @@ class GazeDataset():
         self.masks = [[j != self.tokenizer.pad_token_id for j in i] for i in self.text_inputs]
 
     def read_pipeline(self):
+        # retrieve the sentences and the targets from the dataset.
         self.load_data()
 
+        # retrieve the output dimension
         self.d_out = len(self.targets[0][0])  # number of gaze features
         self.target_pad = -1
 
+        # Tokenize the input and retrieving the masking
         self.tokenize_from_words()
+        # Pad the targets
         self.pad_targets()
+        # Prepare inputs for model
         self.calc_input_ids()
+        # Compute the masks
         self.calc_attn_masks()
+        # Convert the data to numpy arrays
         self.calc_numpy()
 
     def _create_senteces_from_data(self, data):

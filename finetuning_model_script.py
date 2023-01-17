@@ -53,8 +53,8 @@ def main():
     cf = Config.load_json(config_file)
 
     # check if the output directory exists, if not create it!
-    if not os.path.exists(cf.output_dir):
-        os.makedirs(cf.output_dir)
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
 
     # Writer
     writer = SummaryWriter(args.output_dir)
@@ -97,7 +97,7 @@ def main():
     # Trainer
     trainer = GazeTrainer(cf, model, train_dl, optim, scheduler, f"Final_Training",
                                 DEVICE, writer=writer)
-    trainer.train(save_model=True)
+    trainer.train(save_model=True, output_dir=args.output_dir)
 
     loss_tr = dict()
 

@@ -31,7 +31,7 @@ class Trainer(ABC):
     def train_one_step(self, batch):
         pass
 
-    def train(self, save_model=False):
+    def train(self, save_model=False, output_dir=None):
         n_batches_one_epoch = len(self.train_dl)
         n_params = sum(p.numel() for p in self.model.parameters())
         LOGGER.info(f"Num epochs: {self.n_epochs}")
@@ -65,7 +65,7 @@ class Trainer(ABC):
 
         # save the model after last epoch
         if save_model:
-            folder_name = os.path.join(self.cf.output_dir, "model-"+self.cf.model_name+"-finetuned-")
+            folder_name = os.path.join(output_dir, "model-"+self.cf.model_name+"-finetuned")
             
             if self.cf.random_weights:
                 folder_name = folder_name + "randomized"

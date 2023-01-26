@@ -65,7 +65,7 @@ def create_finetuning_optimizer(cf, model):
         ]
     else:
         param_optimizer = list(model.classifier.named_parameters())
-        optimizer_grouped_parameters = [{"params": [p for n, p in param_optimizer]}]
+        optimizer_grouped_parameters = [{"params": [p for _, p in param_optimizer]}]
 
     return AdamW(optimizer_grouped_parameters, lr=cf.lr, eps=cf.eps)
 
@@ -78,6 +78,7 @@ def create_scheduler(cf, optim, dl):
     return get_linear_schedule_with_warmup(optim, num_warmup_steps=0, num_training_steps=n_iters)
 
 
+# TODO: remove it!
 def randomize_model(model):
     #https://stackoverflow.com/questions/68058647/initialize-huggingface-bert-with-random-weights
     for module_ in model.named_modules():

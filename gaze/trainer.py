@@ -68,9 +68,9 @@ class Trainer(ABC):
             folder_name = os.path.join(output_dir, "model-"+self.cf.model_name+"-finetuned")
             
             if self.cf.random_weights:
-                folder_name = folder_name + "randomized"
+                folder_name = folder_name + "-randomized"
             else:
-                folder_name = folder_name + "pretrained"
+                folder_name = folder_name + "-pretrained"
 
             if self.cf.full_finetuning:
                 folder_name = folder_name + "-full"
@@ -101,13 +101,19 @@ class GazeTrainer(Trainer):
         b_target = b_target.to(self.device)
         b_mask = b_mask.to(self.device)
 
+        # forward pass over one batch
         b_output = self.model(input_ids=b_input, attention_mask=b_mask)[0]
         
+        # compute loss
         active_outputs, active_targets = mask_mse_loss(b_output, b_target, self.target_pad, self.model.num_labels)
         loss = self.criterion(active_outputs, active_targets)
 
+        # backward pass over one batch
         loss.backward()
+
+        # clip gradient
         torch.nn.utils.clip_grad_norm_(parameters=self.model.parameters(), max_norm=self.max_grad_norm)
+
         self.optim.step()
         self.scheduler.step()
 

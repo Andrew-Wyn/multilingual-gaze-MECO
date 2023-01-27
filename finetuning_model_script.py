@@ -20,7 +20,7 @@ from transformers import (
     # Trainer,
     # TrainingArguments,
     # default_data_collator,
-    # set_seed,
+    set_seed,
 )
 
 
@@ -52,6 +52,9 @@ def main():
     # Load the .json configuration file
     cf = Config.load_json(config_file)
 
+    # set seed
+    set_seed(cf.seed)
+
     # check if the output directory exists, if not create it!
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
@@ -68,7 +71,6 @@ def main():
     d.randomize_data()
 
     # K-fold cross-validation
-    
     train_losses, test_losses = cross_validation(cf, d, writer, DEVICE, k_folds=cf.k_folds)
 
     print("Train averaged losses:")

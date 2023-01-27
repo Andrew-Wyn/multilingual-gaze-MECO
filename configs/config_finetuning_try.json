@@ -8,10 +8,9 @@
   "train_bs": 8,
   "eval_bs": 8,
   "n_epochs": 5,
-  "full_finetuning": false,
-  "random_weights": false,
-  "output_dir": "finetuning_dir",
-  "dataset": "data/datasets/it/all_mean_dataset.csv",
+  "full_finetuning": true,
+  "random_weights": true,
+  "seed": 1234,
   "used_feature": null,
   "k_folds": 10
 }

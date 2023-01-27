@@ -17,7 +17,7 @@ from transformers import (
     # Trainer,
     # TrainingArguments,
     # default_data_collator,
-    # set_seed,
+    set_seed,
 )
 
 
@@ -40,6 +40,9 @@ def main():
 
     # Load config file
     cf = Config.load_json(config_file)
+
+    # set seed
+    set_seed(cf.seed)
 
     # Tokenizer
     tokenizer = AutoTokenizer.from_pretrained(cf.model_name, cache_dir=CACHE_DIR)

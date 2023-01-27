@@ -18,7 +18,7 @@ from transformers import (
     # Trainer,
     # TrainingArguments,
     # default_data_collator,
-    # set_seed,
+    set_seed,
 )
 
 from modeling.custom_xlm_roberta import XLMRobertaForTokenClassification
@@ -67,6 +67,9 @@ def main():
     encode_attention = cf.encode_attention
     xlm = cf.xlm
     output_hidden_states = cf.output_hidden_states
+
+    # set seed
+    set_seed(cf.seed)
 
     # Tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=CACHE_DIR)

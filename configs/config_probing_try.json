@@ -6,6 +6,7 @@
     "average" : false,
     "pretrained" : false,
     "finetuned" : false,
+    "seed": 1234,
     "dataset": "data/datasets/it/all_mean_dataset.csv",
     "used_feature": null,
     "k_fold" : 10,

@@ -4,6 +4,7 @@
     "output_dir" : "corrs_dir",
     "pretrained" : true,
     "finetuned" : false,
+    "seed" : 1234,
     "dataset": "data/datasets/it/all_mean_dataset.csv",
     "average" : true,
     "encode_attention" : "alti",

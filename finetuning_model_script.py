@@ -106,7 +106,7 @@ def main():
     for key, metric in trainer.tester.train_metrics.items():
         loss_tr[key] = metric
 
-    with open(f"{args.output_dir}/finetuning_results_{datetime.datetime.now()}.json", 'w') as f:
+    with open(f"{args.output_dir}/finetuning_results.json", 'w') as f:
         json.dump({"losses_tr" : train_losses, "losses_ts" : test_losses, "final_training" : loss_tr}, f)
 
 if __name__ == "__main__":

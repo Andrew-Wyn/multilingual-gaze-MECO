@@ -116,14 +116,27 @@ class Prober():
             train_targets = scaler.transform(train_targets)
             test_targets = scaler.transform(test_targets)
 
-            if linear:
-                regr = MultiOutputRegressor(SVR()).fit(train_inputs, train_targets)
-            else:
-                regr = MLPRegressor().fit(train_inputs, train_targets)
+            # apply a model for each feature
+            predicted_train = None
+            predicted_test = None
+            # learn a model for each feature, then concatenate the predictions, 
+            for feat_i in range(train_targets.shape[1]):
+                if linear:
+                    regr = SVR().fit(train_inputs, train_targets[:, feat_i])
+                else:
+                    regr = MLPRegressor().fit(train_inputs, train_targets[:, feat_i])
 
-            predicted_train = regr.predict(train_inputs)
-            predicted_test = regr.predict(test_inputs)
+                if predicted_train is None:
+                    predicted_train = np.expand_dims(regr.predict(train_inputs), axis=0)
+                    predicted_test = np.expand_dims(regr.predict(test_inputs), axis=0)
+                else:
+                    predicted_train = np.concatenate((predicted_train, np.expand_dims(regr.predict(train_inputs), axis=0)), axis=0)
+                    predicted_test = np.concatenate((predicted_test, np.expand_dims(regr.predict(test_inputs), axis=0)), axis=0)
 
+            predicted_train = predicted_train.T
+            predicted_test = predicted_test.T
+
+            # Train errors
             loss_tr = np.concatenate((([mean_absolute_error(train_targets, predicted_train)], mean_absolute_error(train_targets, predicted_train, multioutput='raw_values'))), axis=0)
 
             if not loss_tr_mean is None:
@@ -131,6 +144,7 @@ class Prober():
             else:
                 loss_tr_mean = loss_tr
 
+            # Test errors
             loss_ts = np.concatenate(([mean_absolute_error(test_targets, predicted_test)], mean_absolute_error(test_targets, predicted_test, multioutput='raw_values')), axis=0)
 
             if not loss_ts_mean is None:

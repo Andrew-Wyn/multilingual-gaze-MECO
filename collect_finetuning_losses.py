@@ -6,7 +6,7 @@ def collect_losses(root_dir):
 
     depth = 2
 
-    seeds = [123, 456]
+    seeds = [123, 456, 789]
 
     dict_res = dict() # {"dataset_name" : [means stats, var stats]}
 
@@ -48,6 +48,23 @@ def collect_losses(root_dir):
     return dict_res
 
 
+def avg_losses_over_datasets(datasets_losses):
+    avg_losses_dts = None
+
+    num_dts = 0
+
+    for dataset, mean_std in datasets_losses.items():
+        means = mean_std[0]
+
+        if avg_losses_dts is None:
+            avg_losses_dts = np.array(means)
+        else:
+            avg_losses_dts += np.array(means)
+
+        num_dts += 1
+
+    return avg_losses_dts / num_dts
+
 if __name__ == "__main__":
 
     print("pretraining losses ...")
@@ -65,3 +82,31 @@ if __name__ == "__main__":
     notpretraining_res = collect_losses("finetuning/notpretraining")
 
     print(notpretraining_res)
+
+    print()
+    print("============================")
+    print()
+
+    print("average pretraining losses ...")
+
+    avg_losses_dts_pretrain = avg_losses_over_datasets(pretrain_res)
+
+    print(avg_losses_dts_pretrain)
+
+    print()
+    print("---")
+    print()
+
+    print("average not pretraining losses ...")
+
+    avg_losses_dts_notpretraining = avg_losses_over_datasets(notpretraining_res)
+
+    print(avg_losses_dts_notpretraining)
+
+    print()
+    print("---")
+    print()
+
+    print("difference btw pretrained and notpretrained avg losses ...")
+
+    print(avg_losses_dts_pretrain - avg_losses_dts_notpretraining)

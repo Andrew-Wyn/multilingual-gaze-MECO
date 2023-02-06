@@ -121,7 +121,7 @@ class GazePredictionLoss:
         losses[0] = sum([self.loss(i, j) for i, j in zip(b_output, b_target)])
         for output_orig_len, target_orig_len in zip(b_output, b_target):
             for i in range(1, self.d_report):
-                losses[i] += self.loss(output_orig_len[:, i - 1], target_orig_len[:, i - 1])
+                losses[i] += self.loss(output_orig_len[:, i - 1], target_orig_len[:, i - 1]).cpu()
 
         losses[0] /= sum([i * self.d_gaze for i in b_length])
         losses[1:] /= sum(b_length)

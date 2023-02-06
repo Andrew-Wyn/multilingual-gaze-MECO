@@ -5,6 +5,3 @@ __pycache__
 
 # miscellaneous
 .hf_cache
-finetuning_dir
-probe_dir
-corrs_dir

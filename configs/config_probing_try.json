@@ -1,13 +1,10 @@
 {
     "model_name" : "prajjwal1/bert-tiny",
-    "model_dir" : "finetuning_dir/model-prajjwal1/bert-tiny-finetuned-pretrained-notfull",
-    "output_dir" : "probe_dir",
     "linear" : true,
     "average" : false,
     "pretrained" : false,
     "finetuned" : false,
     "seed": 1234,
-    "dataset": "data/datasets/it/all_mean_dataset.csv",
     "used_feature": null,
     "k_fold" : 10,
     "feature_max" : 100

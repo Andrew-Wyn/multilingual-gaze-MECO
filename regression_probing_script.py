@@ -32,11 +32,24 @@ def main():
     parser = argparse.ArgumentParser(description='Regression Probing')
     parser.add_argument('-c' ,'--config', dest='config_file', action='store',
                         help=f'Relative path of a .json file, that contain parameters for the fine-tune script')
+    parser.add_argument('-o', '--output-dir', dest='output_dir', action='store',
+                        help=f'Relative path of output directory')
+    parser.add_argument('-d', '--dataset', dest='dataset', action='store',
+                        help=f'Relative path of dataset folder, containing the .csv file')
+    parser.add_argument('-m', '--model-dir', dest='model_dir', action='store',
+                        help=f'Relative path of finetuned model directory, containing the config and the saved weights')
 
     # Load the script's arguments
     args = parser.parse_args()
 
     config_file = args.config_file
+    output_dir = args.output_dir
+    dataset = args.dataset
+    model_dir = args.model_dir
+
+    # check if the output directory exists, if not create it!
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
     # Load config file
     cf = Config.load_json(config_file)
@@ -48,23 +61,19 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(cf.model_name, cache_dir=CACHE_DIR)
 
     # Dataset
-    d = GazeDataset(cf, tokenizer, cf.dataset)
+    d = GazeDataset(cf, tokenizer, dataset)
     d.read_pipeline()
     d.randomize_data()
 
-    LOGGER.info("Read the data!!!")
-
     # Model
     if not cf.finetuned: # downaload from huggingface
-        LOGGER.info("Model retrieving, download from hf...")
+        LOGGER.info("Model retrieving, not finetuned, from hf...")
         model = load_model_from_hf(cf.model_name, cf.pretrained, d.d_out)
-    else: # load from disk
-        LOGGER.info("Model retrieving, load from disk...")
-        model = AutoModelForTokenClassification.from_pretrained(cf.model_dir, output_attentions=False, output_hidden_states=True)
-    
-    LOGGER.info("Model retrieved!!!")
+    else: # the finetuned model has to be loaded from disk
+        LOGGER.info("Model retrieving, finetuned, load from disk...")
+        model = AutoModelForTokenClassification.from_pretrained(model_dir, output_attentions=False, output_hidden_states=True)
 
-    prober = Prober(d, cf.feature_max, cf.output_dir)
+    prober = Prober(d, cf.feature_max, output_dir)
 
     _ = prober.create_probing_dataset(model, mean=cf.average)
     prober.probe(cf.linear, cf.k_fold)

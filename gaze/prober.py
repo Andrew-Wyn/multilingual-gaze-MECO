@@ -23,25 +23,19 @@ class Prober():
     def create_probing_dataset(self, model, mean=False):
         LOGGER.info(f"Creating datasets, Mean = {mean} ...")
 
-        LOGGER.info("Splitting dataset in train and test ...")
-
         probing_dataset = defaultdict(list)
 
         print(model.config.num_hidden_layers)
 
         LOGGER.info(f"Start creating dataset...")
 
-        for input, target, mask in tqdm(list(zip(self.d.text_inputs, self.d.targets, self.d.masks))):
-            # print(input)
-            # print(mask)
-            # print(np.multiply.reduce(target != -1, 1) > 0)
+        for text_input, target, mask in tqdm(list(zip(self.d.text_inputs, self.d.targets, self.d.masks))):
 
+            # getting the id of the last token 
             last_token_id = (len(mask) - 1 - mask.tolist()[::-1].index(1)) - 1
 
-            # remove the tokens with -1 in the target
-
             with torch.no_grad():
-                model_output = model(input_ids=torch.as_tensor([input]), attention_mask=torch.as_tensor([mask]))
+                model_output = model(input_ids=torch.as_tensor([text_input]), attention_mask=torch.as_tensor([mask]))
             
             for layer in range(model.config.num_hidden_layers):
 
@@ -51,22 +45,22 @@ class Prober():
 
                 if not mean:
                     # take only the first subword embedding for a given word
-                    input = hidden_state[0, non_masked_els, :]
+                    probe_input = hidden_state[0, non_masked_els, :]
                 else:
                     # take the mean of the subwords's embedding for a given word
                     # id of the words's start
-                    input = [np.mean(split_, 0) for split_ in np.split(hidden_state[0], np.where(non_masked_els)[0], 0)[1:-1]]
+                    probe_input = [np.mean(split_, 0) for split_ in np.split(hidden_state[0], np.where(non_masked_els)[0], 0)[1:-1]]
                     # the last have mean all the vector from the last non masked to the sep token (sep token is the last 1 in mask)
                     last_mean = np.mean(hidden_state[0, np.where(non_masked_els)[0][-1] : last_token_id, :], 0)
-                    input.append(last_mean)
+                    probe_input.append(last_mean)
 
-                    input = np.array(input)
+                    probe_input = np.array(input)
 
                 output = target[non_masked_els, :]
 
                 # take elements token-wise
-                for i in range(input.shape[0]):
-                    probing_dataset[layer].append((input[i], output[i]))
+                for i in range(probe_input.shape[0]):
+                    probing_dataset[layer].append((probe_input[i], output[i]))
                 
         LOGGER.info("Retrieving done, postprocess...")
         
@@ -75,8 +69,8 @@ class Prober():
             input_list = []
             output_list = []
             
-            for input, output in probing_dataset[layer]:
-                input_list.append(input)
+            for probe_input, output in probing_dataset[layer]:
+                input_list.append(probe_input)
                 output_list.append(output)
 
             probing_dataset[layer] = (input_list, output_list)
@@ -96,7 +90,7 @@ class Prober():
         loss_ts_mean = None
 
         for k in tqdm(range(k_folds)):
-            # cicle over folds, for every fold create train_d, valid_d
+            # cicle over folds, for every fold create train_d, test_d
             if k != k_folds-1: # exclude the k-th part from the validation
                 train_inputs = inputs[:(k)*l_ts] + inputs[(k+1)*l_ts:]
                 train_targets = targets[:(k)*l_ts] + targets[(k+1)*l_ts:]
@@ -111,8 +105,7 @@ class Prober():
 
             # min max scaler the targets
             scaler = MinMaxScaler(feature_range=[0, self.feature_max])
-            flat_features = [i for i in train_targets]
-            scaler.fit(flat_features)
+            scaler.fit(train_targets)
             train_targets = scaler.transform(train_targets)
             test_targets = scaler.transform(test_targets)
 
@@ -172,17 +165,14 @@ class Prober():
             score_train, score_test = self._apply_model(inputs, targets, linear, k_folds)
 
             metrics[layer] = {
-                "score_train" : score_train,
-                "score_test" : score_test
+                "score_train" : score_train.tolist(),
+                "score_test" : score_test.tolist()
             }
-
-            metrics[layer]["score_train"] = score_train.tolist()
-            metrics[layer]["score_test"] = score_test.tolist()
 
             LOGGER.info(f"Scores layer - {layer} :")
             LOGGER.info(f"Train: {score_train.tolist()}")
             LOGGER.info(f"Test: {score_test.tolist()}")
             LOGGER.info(f"done!!!")
 
-        with open(f"{self.output_dir}/probe_results_{datetime.datetime.now()}.json", 'w') as f:
+        with open(f"{self.output_dir}/probe_results.json", 'w') as f:
             json.dump(metrics, f)

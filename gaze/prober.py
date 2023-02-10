@@ -9,6 +9,7 @@ import json
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.neural_network import MLPRegressor
 from sklearn.svm import SVR
+from sklearn.linear_model import Ridge
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error
 
@@ -115,7 +116,8 @@ class Prober():
             # learn a model for each feature, then concatenate the predictions, 
             for feat_i in range(train_targets.shape[1]):
                 if linear:
-                    regr = SVR(kernel="linear", degree=1).fit(train_inputs, train_targets[:, feat_i])
+                    # regr = SVR(kernel="linear", degree=1).fit(train_inputs, train_targets[:, feat_i])
+                    regr = Ridge().fit(train_inputs, train_targets[:, feat_i])
                 else:
                     regr = MLPRegressor().fit(train_inputs, train_targets[:, feat_i])
 

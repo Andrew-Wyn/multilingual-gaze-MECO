@@ -84,6 +84,16 @@ if __name__ == "__main__":
     print(notpretraining_res)
 
     print()
+    print("---")
+    print()
+
+    print("pretraining not full losses ...")
+
+    pretraining_notfull_res = collect_losses("finetuning/pretraining_notfull")
+
+    print(pretraining_notfull_res)
+
+    print()
     print("============================")
     print()
 
@@ -105,6 +115,16 @@ if __name__ == "__main__":
 
     print()
     print("---")
+    print()
+
+    print("average pretraining not full losses ...")
+
+    avg_losses_dts_pretraining_notfull = avg_losses_over_datasets(pretraining_notfull_res)
+
+    print(avg_losses_dts_pretraining_notfull)
+
+    print()
+    print("============================")
     print()
 
     print("difference btw pretrained and notpretrained avg losses ...")

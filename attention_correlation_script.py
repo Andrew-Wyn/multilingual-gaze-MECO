@@ -1,5 +1,4 @@
 import argparse
-import datetime
 import json
 import os
 
@@ -122,7 +121,7 @@ def main():
     else:
         raise RuntimeError("encode_attention has to be 'attention' or 'globenc' or 'alti'")
 
-    with open(f"{output_dir}/corrs_results_{datetime.datetime.now()}.json", 'w') as f:
+    with open(f"{output_dir}/corrs_results.json", 'w') as f:
         json.dump(to_print, f)
 
 

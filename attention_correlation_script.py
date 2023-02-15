@@ -52,6 +52,11 @@ def main():
     parser = argparse.ArgumentParser(description='Fine-tune a XLM-Roberta-base following config json passed')
     parser.add_argument('-c' ,'--config', dest='config_file', action='store',
                         help=f'Relative path of a .json file, that contain parameters for the fine-tune script')
+    parser.add_argument('-o', '--output-dir', dest='output_dir', action='store',
+                        help=f'Relative path of output directory')
+    parser.add_argument('-d', '--dataset', dest='dataset', action='store',
+                        help=f'Relative path of dataset folder, containing the .csv file')
+
 
     args = parser.parse_args()
     config_file = args.config_file
@@ -62,7 +67,7 @@ def main():
     finetuned = cf.finetuned
     model_name = cf.model_name
     model_dir = cf.model_dir
-    output_dir = cf.output_dir
+    output_dir = args.output_dir
     average = cf.average
     encode_attention = cf.encode_attention
     xlm = cf.xlm
@@ -70,6 +75,11 @@ def main():
 
     # set seed
     set_seed(cf.seed)
+
+    # check if the output directory exists, if not create it!
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
 
     # Tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=CACHE_DIR)
@@ -81,7 +91,7 @@ def main():
         tokenClassifier = BertForTokenClassification
 
     # Dataset
-    d = GazeDataset(cf, tokenizer, cf.dataset)
+    d = GazeDataset(cf, tokenizer, args.dataset)
     d.read_pipeline()
     d.randomize_data()
 

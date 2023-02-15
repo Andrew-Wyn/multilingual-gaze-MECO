@@ -82,7 +82,7 @@ class Correlation(ABC):
             for i_feature in range(self.model.num_labels):
                 corr_dict[i_layer][i_feature] = [] # for each feature i will save a list of correlations over wich i will do a mean
 
-        for input, target, mask in tqdm(list(zip(self.d.text_inputs, self.d.targets, self.d.masks))[:3]):
+        for input, target, mask in tqdm(list(zip(self.d.text_inputs, self.d.targets, self.d.masks))):
             
             importance_list = self.compute_importance(input, mask)
 
@@ -91,6 +91,7 @@ class Correlation(ABC):
 
                 importance = importance[non_padded_ids]
 
+                # first token ids doesn't contains cls and sep tokes
                 first_token_ids = np.where(np.multiply.reduce(target[non_padded_ids] != -1, 1) > 0)[0]
 
                 importance = self._handle_subwords(importance, first_token_ids, non_padded_ids)
@@ -138,13 +139,14 @@ class AttentionCorrelation(Correlation):
             # I also tried the sum once, but the result was even worse
             mean_attention = np.mean(attention, axis=0)
 
-            # We drop padded tokens
-            # mean_attention = mean_attention[non_padded_ids]
+            # remove the attention cells of the padding tokens
+            mean_attention = mean_attention[mask==1]
 
             # We drop CLS and SEP tokens
             mean_attention = mean_attention[1:-1]
 
             # 2. For each word, we sum over the attention to the other words to determine relative importance
+            # sum the rows, so each word has the sum of other words to it.
             sum_attention = np.sum(mean_attention, axis=0)
 
             importance_list.append(sum_attention)
@@ -173,6 +175,10 @@ class GLOBENCCorrelation(Correlation):
 
         # once created the encoding, compress the encoding to have a vector for each sentence
         for enc in globenc:
+
+            # remove the attention cells of the padding tokens
+            enc = enc[mask==1]
+            
             # We drop CLS and SEP tokens
             enc = enc[1:-1]
 
@@ -198,6 +204,7 @@ class ALTICorrelation(Correlation):
         
         resultant_norm = torch.norm(torch.squeeze(contributions_data['resultants']),p=1,dim=-1)
         normalized_contributions = normalize_contributions(contributions_data['contributions'],scaling='min_sum',resultant_norm=resultant_norm)
+
         # Aggregate and compute ALTI
         normalized_contributions  = normalized_contributions.numpy()
         alti_enc = AttentionRollout().compute_flows([normalized_contributions], output_hidden_states=True)[0]
@@ -207,6 +214,10 @@ class ALTICorrelation(Correlation):
 
         # once created the encoding, compress the encoding to have a vector for each sentence
         for enc in alti_enc:
+
+            # remove the attention cells of the padding tokens
+            enc = enc[mask==1]
+
             # We drop CLS and SEP tokens
             enc = enc[1:-1]
 

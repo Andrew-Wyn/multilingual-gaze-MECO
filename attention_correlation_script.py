@@ -55,6 +55,8 @@ def main():
                         help=f'Relative path of output directory')
     parser.add_argument('-d', '--dataset', dest='dataset', action='store',
                         help=f'Relative path of dataset folder, containing the .csv file')
+    parser.add_argument('-m', '--model-dir', dest='model_dir', action='store',
+                        help=f'Relative path of finetuned model directory, containing the config and the saved weights')
 
 
     args = parser.parse_args()
@@ -65,7 +67,7 @@ def main():
     pretrained = cf.pretrained
     finetuned = cf.finetuned
     model_name = cf.model_name
-    model_dir = cf.model_dir
+    model_dir = args.model_dir
     output_dir = args.output_dir
     average = cf.average
     encode_attention = cf.encode_attention

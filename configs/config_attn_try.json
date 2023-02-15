@@ -1,6 +1,5 @@
 {
     "model_name" : "prajjwal1/bert-tiny",
-    "model_dir" : "finetuning_dir/model-prajjwal1/bert-tiny-finetuned-pretrained-notfull",
     "pretrained" : true,
     "finetuned" : false,
     "seed" : 1234,

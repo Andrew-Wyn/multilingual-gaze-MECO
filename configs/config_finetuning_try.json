@@ -12,5 +12,6 @@
   "random_weights": true,
   "seed": 1234,
   "used_feature": null,
-  "k_folds": 10
+  "k_folds": 10,
+  "multiregressor":false
 }

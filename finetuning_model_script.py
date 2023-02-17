@@ -88,7 +88,7 @@ def main():
     train_dl = GazeDataLoader(cf, d.text_inputs, d.targets, d.masks, d.target_pad, mode="train")
 
     # Model
-    model = load_model_from_hf(cf.model_name, not cf.random_weights, d.d_out)
+    model = load_model_from_hf(cf.model_name, not cf.random_weights, cf.multiregressor, d.d_out)
 
     # Optimizer
     optim = create_finetuning_optimizer(cf, model)

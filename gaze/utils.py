@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import json
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
+from modeling.multioutput_xlm_roberta import MultiTaskSequenceRegressionOutput
 from transformers import (
     AutoConfig,
     AutoModelForTokenClassification,
@@ -167,7 +168,8 @@ def minMaxScaling(train_targets, test_targets=None, feature_max=1, pad_token=-1)
     return train_targets_ret
 
 
-def load_model_from_hf(model_name, pretrained, d_out=8):
+def load_model_from_hf(model_name, pretrained, multiregressor, d_out=8):
+
     # Model
     LOGGER.info("Initiating model ...")
     if not pretrained:
@@ -175,10 +177,18 @@ def load_model_from_hf(model_name, pretrained, d_out=8):
         LOGGER.info("Take randomized model")
         config = AutoConfig.from_pretrained(model_name, num_labels=d_out,
                                     output_attentions=False, output_hidden_states=True)
-        model = AutoModelForTokenClassification.from_config(config)
+        if multiregressor:
+            model = MultiTaskSequenceRegressionOutput.from_config(config)
+        else:
+            model = AutoModelForTokenClassification.from_config(config)
     else:
         LOGGER.info("Take pretrained model")
-        model = AutoModelForTokenClassification.from_pretrained(model_name, num_labels=d_out,
+    
+        if multiregressor:
+            model = MultiTaskSequenceRegressionOutput.from_pretrained(model_name, num_labels=d_out,
+                            output_attentions=False, output_hidden_states=True)
+        else:
+            model = AutoModelForTokenClassification.from_pretrained(model_name, num_labels=d_out,
                             output_attentions=False, output_hidden_states=True)
 
     return model

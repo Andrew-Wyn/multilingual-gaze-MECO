@@ -161,7 +161,7 @@ def cross_validation(cf, d, writer, DEVICE, k_folds=10):
         test_dl = GazeDataLoader(cf, test_inputs, test_targets, test_masks, d.target_pad, mode="test")
 
         # Model
-        model = load_model_from_hf(cf.model_name, not cf.random_weights, d.d_out)
+        model = load_model_from_hf(cf.model_name, not cf.random_weights, cf.multiregressor, d.d_out)
 
         # optimizer
         optim = create_finetuning_optimizer(cf, model)

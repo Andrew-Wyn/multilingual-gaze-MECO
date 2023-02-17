@@ -3,39 +3,33 @@ from typing import Optional, Union, Tuple, Any, List, Dict, Mapping
 
 import numpy as np
 import torch
-from attr import dataclass
-from datasets import load_dataset
 from torch.nn import MSELoss
 from torch import nn
-from torch.utils.data import DataLoader
-from tqdm import tqdm
-from transformers import XLMRObertaPretrainedModel, BertPreTrainedModel, XLMRobertaModel, BertModel, AutoTokenizer, training_args, TrainingArguments, Trainer, \
-    get_scheduler
-from transformers.data.data_collator import DataCollatorMixin, default_data_collator, InputDataClass
+from transformers import XLMRobertaPreTrainedModel, XLMRobertaModel
 from transformers.utils import ModelOutput
 
 
 class MultiTaskSequenceRegressionOutput(ModelOutput):
     loss: Optional[torch.FloatTensor] = None
-    multi_regression_output: Dict[int, torch.FloatTensor] = None
+    multi_regression_output: Optional[torch.FloatTensor] = None
     hidden_states: Optional[Tuple[torch.FloatTensor]] = None
     attentions: Optional[Tuple[torch.FloatTensor]] = None
 
 
-class XLMRobertaMultiTaskForSequenceRegression(XLMRObertaPretrainedModel):
+class XLMRobertaMultiTaskForSequenceRegression(XLMRobertaPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
         self.config = config
 
-        self.xlm_roberta = BertModel(config)
+        self.xlm_roberta = XLMRobertaModel(config)
         classifier_dropout = (
             config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
         )
         self.dropout = nn.Dropout(classifier_dropout)
 
         self.regressors = nn.ModuleDict({
-                    task: nn.Linear(config.hidden_size, 1) for
+                    str(task): nn.Linear(config.hidden_size, 1) for
                                         task in range(self.num_labels)
                                     })
         # Initialize weights and apply final processing
@@ -62,20 +56,22 @@ class XLMRobertaMultiTaskForSequenceRegression(XLMRObertaPretrainedModel):
 
         pooled_output = self.dropout(pooled_output)
 
-        multi_regression_output = {}
+        multi_regression_output = list()
         loss = None
         loss_fct = MSELoss()
 
         for task in range(self.num_labels):
-                output_task = self.regressors[task](pooled_output)
-                multi_regression_output[task] = output_task
-                
+                output_task = self.regressors[str(task)](pooled_output)
+                multi_regression_output.append(torch.squeeze(output_task))
+
                 if labels is not None:
                     loss_ = loss_fct(output_task, labels)
                     if loss is None:
                         loss = loss_
                     else:
                         loss += loss_
+
+        multi_regression_output = torch.stack(multi_regression_output, dim=-1)
 
         if not return_dict:
             output = (multi_regression_output,) + outputs[2:]

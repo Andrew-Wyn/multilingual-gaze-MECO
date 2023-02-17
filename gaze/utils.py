@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import json
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
-from modeling.multioutput_xlm_roberta import MultiTaskSequenceRegressionOutput
+from modeling.multioutput_xlm_roberta import XLMRobertaMultiTaskForSequenceRegression
 from transformers import (
     AutoConfig,
     AutoModelForTokenClassification,
@@ -178,14 +178,14 @@ def load_model_from_hf(model_name, pretrained, multiregressor, d_out=8):
         config = AutoConfig.from_pretrained(model_name, num_labels=d_out,
                                     output_attentions=False, output_hidden_states=True)
         if multiregressor:
-            model = MultiTaskSequenceRegressionOutput.from_config(config)
+            model = XLMRobertaMultiTaskForSequenceRegression.from_config(config)
         else:
             model = AutoModelForTokenClassification.from_config(config)
     else:
         LOGGER.info("Take pretrained model")
     
         if multiregressor:
-            model = MultiTaskSequenceRegressionOutput.from_pretrained(model_name, num_labels=d_out,
+            model = XLMRobertaMultiTaskForSequenceRegression.from_pretrained(model_name, num_labels=d_out,
                             output_attentions=False, output_hidden_states=True)
         else:
             model = AutoModelForTokenClassification.from_pretrained(model_name, num_labels=d_out,

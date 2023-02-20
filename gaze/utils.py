@@ -175,11 +175,14 @@ def load_model_from_hf(model_name, pretrained, multiregressor, d_out=8):
     if not pretrained:
         # initiate model with random weights
         LOGGER.info("Take randomized model")
-        config = AutoConfig.from_pretrained(model_name, num_labels=d_out,
-                                    output_attentions=False, output_hidden_states=True)
+        
         if multiregressor:
-            model = XLMRobertaMultiTaskForSequenceRegression.from_config(config)
+            model = XLMRobertaMultiTaskForSequenceRegression.from_pretrained(model_name, num_labels=d_out,
+                            output_attentions=False, output_hidden_states=True)
+            model = randomize_model(model)
         else:
+            config = AutoConfig.from_pretrained(model_name, num_labels=d_out,
+                                    output_attentions=False, output_hidden_states=True)
             model = AutoModelForTokenClassification.from_config(config)
     else:
         LOGGER.info("Take pretrained model")

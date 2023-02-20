@@ -150,3 +150,39 @@ if __name__ == "__main__":
     print("difference btw pretrained and notpretrained avg losses ...")
 
     print(avg_losses_dts_pretrain - avg_losses_dts_notpretraining)
+
+    print(avg_losses_dts_pretrain - avg_losses_dts_notpretraining)
+
+    print()
+    print("============================")
+    print()
+
+    print("Results for DUR Feature ...")
+
+    print("pretraining losses ...")
+
+    pretrain_res = collect_losses("finetuning/pretraining_dur")
+
+    print(pretrain_res)
+
+    print()
+    print("---")
+    print()
+
+    print("not pretraining losses ...")
+
+    notpretraining_res = collect_losses("finetuning/notpretraining_dur")
+
+    print(notpretraining_res)
+
+    print()
+    print("============================")
+    print()
+
+    print("Results for PROB_SKIP Feature ...")
+
+    print("pretraining losses ...")
+
+    pretrain_res = collect_losses("finetuning/pretraining_prob_skip")
+
+    print(pretrain_res)

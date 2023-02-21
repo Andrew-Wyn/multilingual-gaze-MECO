@@ -22,7 +22,7 @@ class XLMRobertaMultiTaskForSequenceRegression(XLMRobertaPreTrainedModel):
         self.num_labels = config.num_labels
         self.config = config
 
-        self.xlm_roberta = XLMRobertaModel(config)
+        self.roberta = XLMRobertaModel(config)
         classifier_dropout = (
             config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
         )
@@ -40,7 +40,7 @@ class XLMRobertaMultiTaskForSequenceRegression(XLMRobertaPreTrainedModel):
                 head_mask: Optional[torch.Tensor] = None, inputs_embeds: Optional[torch.Tensor] = None,
                 labels: Optional[torch.Tensor] = None, output_attentions: Optional[bool] = None,
                 output_hidden_states: Optional[bool] = None, return_dict: Optional[bool] = None, ):
-        outputs = self.xlm_roberta(
+        outputs = self.roberta(
             input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,

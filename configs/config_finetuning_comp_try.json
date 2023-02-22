@@ -6,7 +6,6 @@
   "max_grad_norm": 10.0,
   "train_bs": 8,
   "eval_bs": 8,
-  "n_epochs": 5,
-  "random_weights": true,
+  "n_epochs": 1,
   "seed": 1234
 }

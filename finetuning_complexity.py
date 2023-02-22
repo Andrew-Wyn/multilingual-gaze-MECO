@@ -3,6 +3,7 @@ import argparse
 
 import torch
 
+import numpy as np
 import pandas as pd
 
 from transformers import (
@@ -10,7 +11,7 @@ from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
     # DataCollatorWithPadding,
-    # EvalPrediction,
+    EvalPrediction,
     # HfArgumentParser,
     # PretrainedConfig,
     Trainer,
@@ -109,6 +110,13 @@ if __name__ == "__main__":
                         help=f'Relative path of output directory')
     parser.add_argument('-d', '--dataset', dest='dataset', action='store',
                         help=f'Relative path of dataset folder, containing the .csv file')
+    parser.add_argument('-m', '--model-dir', dest='model_dir', action='store',
+                        help=f'Relative path of finetuned model directory, containing the config and the saved weights')
+    parser.add_argument('-p', '--pretrained', dest='pretrained', action=argparse.BooleanOptionalAction,
+                        help=f'Bool, start from a pretrained model')
+    parser.add_argument('-f', '--finetuned', dest='finetuned', action=argparse.BooleanOptionalAction,
+                        help=f'Bool, start from a finetuned model')
+
 
     # Read the script's argumenents
     args = parser.parse_args()
@@ -150,13 +158,29 @@ if __name__ == "__main__":
         weight_decay=cf.weight_decay,               # strength of weight decay
     )
 
-    model = load_model_from_hf(cf.model_name, not cf.random_weights, 7)
+    print(args.finetuned)
+
+        # Model
+    if not args.finetuned: # downaload from huggingface
+        LOGGER.info("Model retrieving, not finetuned, from hf...")
+        model = load_model_from_hf(cf.model_name, args.pretrained, 7)
+    else: # the finetuned model has to be loaded from disk
+        LOGGER.info("Model retrieving, finetuned, load from disk...")
+        model = AutoModelForSequenceClassification.from_pretrained(args.model_dir, output_attentions=False, output_hidden_states=True)
+
+
+    def compute_metrics(p: EvalPrediction):
+        preds = p.predictions[0] if isinstance(p.predictions, tuple) else p.predictions
+        preds = np.argmax(preds, axis=1)
+        
+        return {"accuracy": (preds == p.label_ids).astype(np.float32).mean().item()}
 
     trainer = Trainer(
         model=model,                         # the instantiated 🤗 Transformers model to be trained
         args=training_args,                  # training arguments, defined above
         train_dataset=train_dataset,         # training dataset
-        eval_dataset=val_dataset             # evaluation dataset
+        eval_dataset=val_dataset,             # evaluation dataset
+        compute_metrics=compute_metrics
     )
 
     train_result = trainer.train()

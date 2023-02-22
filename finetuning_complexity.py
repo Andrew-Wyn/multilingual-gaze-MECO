@@ -155,6 +155,7 @@ if __name__ == "__main__":
         per_device_eval_batch_size=cf.eval_bs,   # batch size for evaluation
         warmup_steps=500,                # number of warmup steps for learning rate scheduler
         weight_decay=cf.weight_decay,               # strength of weight decay
+        save_strategy="no"
     )
 
     print(args.finetuned)
@@ -183,8 +184,6 @@ if __name__ == "__main__":
     )
 
     train_result = trainer.train()
-
-    trainer.save_model()
 
     # compute train results
     metrics = train_result.metrics

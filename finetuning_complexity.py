@@ -112,11 +112,10 @@ if __name__ == "__main__":
                         help=f'Relative path of dataset folder, containing the .csv file')
     parser.add_argument('-m', '--model-dir', dest='model_dir', action='store',
                         help=f'Relative path of finetuned model directory, containing the config and the saved weights')
-    parser.add_argument('-p', '--pretrained', dest='pretrained', action=argparse.BooleanOptionalAction,
+    parser.add_argument('-p', '--pretrained', dest='pretrained', default=False, action='store_true',
                         help=f'Bool, start from a pretrained model')
-    parser.add_argument('-f', '--finetuned', dest='finetuned', action=argparse.BooleanOptionalAction,
+    parser.add_argument('-f', '--finetuned', dest='finetuned', default=False, action='store_true',
                         help=f'Bool, start from a finetuned model')
-
 
     # Read the script's argumenents
     args = parser.parse_args()

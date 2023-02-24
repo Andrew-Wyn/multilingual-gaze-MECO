@@ -20,6 +20,7 @@ from transformers import (
     set_seed,
 )
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 
 from gaze.utils import Config, LOGGER
@@ -32,14 +33,16 @@ def read_complexity_dataset(path=None):
 
     for _, row in df.iterrows():
         
+        num_individuals = 20
+
         texts.append(row["SENTENCE"])
 
         label = 0
 
-        for i in range(20):
+        for i in range(num_individuals):
             label += int(row[f"judgement{i+1}"])
 
-        label = int(label/20)
+        label = label/num_individuals
 
         labels.append(label)
 
@@ -85,20 +88,17 @@ def load_model_from_hf(model_name, pretrained, d_out=8):
     return model
 
 
-class CustomTrainer(Trainer):
-    def compute_loss(self, model, inputs, return_outputs=False):
-        outputs = model(
-            input_ids=inputs['input_ids'],
-            attention_mask=inputs['attention_mask'],
-            token_type_ids=inputs['token_type_ids']
-        )
+def compute_metrics_for_regression(eval_pred):
+    logits, labels = eval_pred
+    labels = labels.reshape(-1, 1)
 
-        print(outputs['logits'].shape)
-        print(inputs['labels'])
+    mse = mean_squared_error(labels, logits)
+    rmse = mean_squared_error(labels, logits, squared=False)
+    mae = mean_absolute_error(labels, logits)
+    r2 = r2_score(labels, logits)
+    smape = 1/len(labels) * np.sum(2 * np.abs(logits-labels) / (np.abs(labels) + np.abs(logits))*100)
 
-        loss = torch.nn.BCEWithLogitsLoss()(outputs['logits'],
-                                            inputs['labels'])
-        return (loss, outputs) if return_outputs else loss
+    return {"mse": mse, "rmse": rmse, "mae": mae, "r2": r2, "smape": smape}
 
 
 if __name__ == "__main__":
@@ -133,20 +133,15 @@ if __name__ == "__main__":
 
     texts, labels = read_complexity_dataset(args.dataset)
 
-    train_texts, test_texts, train_labels, test_labels = train_test_split(texts, labels, test_size=.2, random_state=cf.seed)
-
-    train_texts, val_texts, train_labels, val_labels = train_test_split(train_texts, train_labels, test_size=.2, random_state=cf.seed)
-
+    train_texts, val_texts, train_labels, val_labels = train_test_split(texts, labels, test_size=.2, random_state=cf.seed)
 
     tokenizer = AutoTokenizer.from_pretrained(cf.model_name, cache_dir=CACHE_DIR)
 
     train_encodings = tokenizer(train_texts, truncation=True, padding=True)
     val_encodings = tokenizer(val_texts, truncation=True, padding=True)
-    test_encodings = tokenizer(test_texts, truncation=True, padding=True)
 
     train_dataset = ComplexityDataset(train_encodings, train_labels)
     val_dataset = ComplexityDataset(val_encodings, val_labels)
-    test_dataset = ComplexityDataset(test_encodings, test_labels)
 
     training_args = TrainingArguments(
         output_dir=args.output_dir,          # output directory
@@ -158,29 +153,32 @@ if __name__ == "__main__":
         save_strategy="no"
     )
 
-    print(args.finetuned)
 
-        # Model
+    """
+
+    /see: https://towardsdatascience.com/linear-regression-with-hugging-face-3883fe729324
+
+    According to Hugging Face’s library, when we load the pre-trained models from the Hugging Face API, 
+    setting the num_labels to 1 for the AutoModelForSequenceClassification will trigger the linear regression and use 
+    MSELoss() as the loss function automatically.
+    """
+    # Model
     if not args.finetuned: # downaload from huggingface
         LOGGER.info("Model retrieving, not finetuned, from hf...")
-        model = load_model_from_hf(cf.model_name, args.pretrained, 7)
+        model = load_model_from_hf(cf.model_name, args.pretrained, 1)
     else: # the finetuned model has to be loaded from disk
         LOGGER.info("Model retrieving, finetuned, load from disk...")
-        model = AutoModelForSequenceClassification.from_pretrained(args.model_dir, output_attentions=False, output_hidden_states=True)
-
-
-    def compute_metrics(p: EvalPrediction):
-        preds = p.predictions[0] if isinstance(p.predictions, tuple) else p.predictions
-        preds = np.argmax(preds, axis=1)
-        
-        return {"accuracy": (preds == p.label_ids).astype(np.float32).mean().item()}
+        model = AutoModelForSequenceClassification.from_pretrained(args.model_dir, 
+                                                                   num_labels=1, 
+                                                                   ignore_mismatched_sizes=True, 
+                                                                   output_attentions=False, output_hidden_states=False)
 
     trainer = Trainer(
         model=model,                         # the instantiated 🤗 Transformers model to be trained
         args=training_args,                  # training arguments, defined above
         train_dataset=train_dataset,         # training dataset
-        eval_dataset=val_dataset,             # evaluation dataset
-        compute_metrics=compute_metrics
+        eval_dataset=val_dataset,            # evaluation dataset
+        compute_metrics=compute_metrics_for_regression
     )
 
     train_result = trainer.train()

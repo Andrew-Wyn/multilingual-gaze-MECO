@@ -134,14 +134,18 @@ if __name__ == "__main__":
     texts, labels = read_complexity_dataset(args.dataset)
 
     train_texts, val_texts, train_labels, val_labels = train_test_split(texts, labels, test_size=.2, random_state=cf.seed)
+    train_texts, test_texts, train_labels, test_labels = train_test_split(train_texts, train_labels, test_size=.2, random_state=cf.seed)
+
 
     tokenizer = AutoTokenizer.from_pretrained(cf.model_name, cache_dir=CACHE_DIR)
 
     train_encodings = tokenizer(train_texts, truncation=True, padding=True)
     val_encodings = tokenizer(val_texts, truncation=True, padding=True)
+    test_encodings = tokenizer(test_texts, truncation=True, padding=True)
 
     train_dataset = ComplexityDataset(train_encodings, train_labels)
     val_dataset = ComplexityDataset(val_encodings, val_labels)
+    test_dataset = ComplexityDataset(test_encodings, test_labels)
 
     training_args = TrainingArguments(
         output_dir=args.output_dir,          # output directory
@@ -150,7 +154,9 @@ if __name__ == "__main__":
         per_device_eval_batch_size=cf.eval_bs,   # batch size for evaluation
         warmup_steps=500,                # number of warmup steps for learning rate scheduler
         weight_decay=cf.weight_decay,               # strength of weight decay
-        save_strategy="no"
+        save_strategy="no",
+        load_best_model_at_end = True,     
+        metric_for_best_model = 'rmse',    
     )
 
 
@@ -191,8 +197,8 @@ if __name__ == "__main__":
     trainer.save_metrics("train", metrics)
 
     # compute evaluation results
-    metrics = trainer.evaluate()
+    metrics = trainer.evaluate(test_dataset)
 
     # save evaluation results
-    trainer.log_metrics("eval", metrics)
-    trainer.save_metrics("eval", metrics)
+    trainer.log_metrics("test", metrics)
+    trainer.save_metrics("test", metrics)

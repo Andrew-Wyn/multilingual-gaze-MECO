@@ -35,17 +35,11 @@ CACHE_DIR = f"{os.getcwd()}/.hf_cache/"
 os.environ['TRANSFORMERS_CACHE'] = CACHE_DIR
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def compute_metrics_for_regression(eval_pred):
-    logits, labels = eval_pred
-    labels = labels.reshape(-1, 1)
+def compute_metrics(p: EvalPrediction):
+    preds = p.predictions[0] if isinstance(p.predictions, tuple) else p.predictions
+    preds = np.argmax(preds, axis=1)
 
-    mse = mean_squared_error(labels, logits)
-    rmse = mean_squared_error(labels, logits, squared=False)
-    mae = mean_absolute_error(labels, logits)
-    r2 = r2_score(labels, logits)
-    smape = 1/len(labels) * np.sum(2 * np.abs(logits-labels) / (np.abs(labels) + np.abs(logits))*100)
-
-    return {"mse": mse, "rmse": rmse, "mae": mae, "r2": r2, "smape": smape}
+    return {"accuracy": (preds == p.label_ids).astype(np.float32).mean().item()}
 
 
 if __name__ == "__main__":
@@ -92,9 +86,7 @@ if __name__ == "__main__":
         per_device_eval_batch_size=cf.eval_bs,   # batch size for evaluation
         warmup_steps=500,                # number of warmup steps for learning rate scheduler
         weight_decay=cf.weight_decay,               # strength of weight decay
-        save_strategy="no",
-        load_best_model_at_end = True,     
-        metric_for_best_model = 'rmse',    
+        save_strategy="no"
     )
 
     # Model
@@ -105,14 +97,14 @@ if __name__ == "__main__":
 
     tokenized_datasets_sst2 = dataset_sst2.map(tokenize_function, batched=True,
                                                             load_from_cache_file=CACHE_DIR)
-    
+        
     trainer = Trainer(
         model=model,                         # the instantiated 🤗 Transformers model to be trained
         args=training_args,                  # training arguments, defined above
         train_dataset=tokenized_datasets_sst2["train"],         # training dataset
         eval_dataset=tokenized_datasets_sst2["validation"],            # evaluation dataset
-        compute_metrics=compute_metrics_for_regression,
-        tokenizer=tokenizer
+        tokenizer=tokenizer,
+        compute_metrics=compute_metrics
     )
 
     train_result = trainer.train()
@@ -124,8 +116,10 @@ if __name__ == "__main__":
     trainer.log_metrics("train", metrics)
     trainer.save_metrics("train", metrics)
 
+
+
     # compute evaluation results
-    metrics = trainer.evaluate(tokenized_datasets_sst2["test"])
+    metrics = trainer.evaluate()
 
     # save evaluation results
     trainer.log_metrics("test", metrics)

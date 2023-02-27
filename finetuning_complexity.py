@@ -6,6 +6,7 @@ import torch
 import numpy as np
 import pandas as pd
 
+
 from transformers import (
     AutoConfig,
     AutoModelForSequenceClassification,
@@ -16,7 +17,6 @@ from transformers import (
     # PretrainedConfig,
     Trainer,
     TrainingArguments,
-    # default_data_collator,
     set_seed,
 )
 from sklearn.model_selection import train_test_split
@@ -184,7 +184,8 @@ if __name__ == "__main__":
         args=training_args,                  # training arguments, defined above
         train_dataset=train_dataset,         # training dataset
         eval_dataset=val_dataset,            # evaluation dataset
-        compute_metrics=compute_metrics_for_regression
+        compute_metrics=compute_metrics_for_regression,
+        tokenizer = tokenizer
     )
 
     train_result = trainer.train()

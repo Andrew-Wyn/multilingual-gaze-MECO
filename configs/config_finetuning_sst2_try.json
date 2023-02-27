@@ -1,0 +1,8 @@
+{
+    "model_name": "prajjwal1/bert-tiny",
+    "weight_decay": 1e-2,
+    "train_bs": 8,
+    "eval_bs": 8,
+    "n_epochs": 1,
+    "seed": 1234
+}

@@ -110,6 +110,8 @@ if __name__ == "__main__":
 
     train_result = trainer.train()
 
+    trainer.save_model(args.output_dir)
+
     # compute train results
     metrics = train_result.metrics
 

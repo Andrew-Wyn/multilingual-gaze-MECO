@@ -160,7 +160,8 @@ if __name__ == "__main__":
         learning_rate=cf.lr,
         load_best_model_at_end = True,  
         metric_for_best_model = 'rmse',
-        save_total_limit = 1 # Only last model are saved. Older ones are deleted.  
+        save_total_limit = 1, # Only last model are saved. Older ones are deleted.
+        greater_is_better = False
     )
 
     """

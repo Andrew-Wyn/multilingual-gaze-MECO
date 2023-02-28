@@ -68,7 +68,7 @@ def main():
     # Model
     if not cf.finetuned: # downaload from huggingface
         LOGGER.info("Model retrieving, not finetuned, from hf...")
-        model = load_model_from_hf(cf.model_name, cf.pretrained, d.d_out)
+        model = load_model_from_hf(cf.model_name, cf.pretrained, False, d.d_out)
     else: # the finetuned model has to be loaded from disk
         LOGGER.info("Model retrieving, finetuned, load from disk...")
         model = AutoModelForTokenClassification.from_pretrained(model_dir, output_attentions=False, output_hidden_states=True)

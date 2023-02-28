@@ -17,6 +17,7 @@ from transformers import (
     # PretrainedConfig,
     Trainer,
     TrainingArguments,
+    EarlyStoppingCallback,
     set_seed,
 )
 from sklearn.model_selection import train_test_split
@@ -154,11 +155,13 @@ if __name__ == "__main__":
         per_device_eval_batch_size=cf.eval_bs,   # batch size for evaluation
         warmup_steps=500,                # number of warmup steps for learning rate scheduler
         weight_decay=cf.weight_decay,               # strength of weight decay
-        save_strategy="no",
-        load_best_model_at_end = True,     
-        metric_for_best_model = 'rmse',    
+        save_strategy="epoch",
+        evaluation_strategy="epoch",
+        learning_rate=cf.lr,
+        load_best_model_at_end = True,  
+        metric_for_best_model = 'rmse',
+        save_total_limit = 1 # Only last model are saved. Older ones are deleted.  
     )
-
 
     """
 
@@ -185,7 +188,8 @@ if __name__ == "__main__":
         train_dataset=train_dataset,         # training dataset
         eval_dataset=val_dataset,            # evaluation dataset
         compute_metrics=compute_metrics_for_regression,
-        tokenizer = tokenizer
+        tokenizer = tokenizer,
+        callbacks = [EarlyStoppingCallback(early_stopping_patience=cf.patience)]
     )
 
     train_result = trainer.train()

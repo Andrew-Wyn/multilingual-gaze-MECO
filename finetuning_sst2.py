@@ -49,14 +49,8 @@ if __name__ == "__main__":
                         help=f'Relative path of a .json file, that contain parameters for the fine-tune script')
     parser.add_argument('-o', '--output-dir', dest='output_dir', action='store',
                         help=f'Relative path of output directory')
-    parser.add_argument('-d', '--dataset', dest='dataset', action='store',
-                        help=f'Relative path of dataset folder, containing the .csv file')
-    parser.add_argument('-m', '--model-dir', dest='model_dir', action='store',
+    parser.add_argument('-m', '--model', dest='model', action='store',
                         help=f'Relative path of finetuned model directory, containing the config and the saved weights')
-    parser.add_argument('-p', '--pretrained', dest='pretrained', default=False, action='store_true',
-                        help=f'Bool, start from a pretrained model')
-    parser.add_argument('-f', '--finetuned', dest='finetuned', default=False, action='store_true',
-                        help=f'Bool, start from a finetuned model')
 
     # Read the script's argumenents
     args = parser.parse_args()
@@ -94,7 +88,7 @@ if __name__ == "__main__":
     LOGGER.info("Model retrieving...")
     LOGGER.info("Take pretrained model")
 
-    model = AutoModelForSequenceClassification.from_pretrained(cf.model_name)
+    model = AutoModelForSequenceClassification.from_pretrained(args.model)
 
     tokenized_datasets_sst2 = dataset_sst2.map(tokenize_function, batched=True,
                                                             load_from_cache_file=CACHE_DIR)

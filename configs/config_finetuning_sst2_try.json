@@ -4,5 +4,6 @@
     "train_bs": 8,
     "eval_bs": 8,
     "n_epochs": 1,
-    "seed": 1234
+    "seed": 1234,
+    "lr": 2e-05
 }

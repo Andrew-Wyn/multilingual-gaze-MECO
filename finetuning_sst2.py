@@ -110,17 +110,16 @@ if __name__ == "__main__":
     LOGGER.info("Model retrieving...")
     LOGGER.info("Take pretrained model")
 
-    model = AutoModelForSequenceClassification.from_pretrained(args.model)
-
     # Model
     if not args.finetuned: # downaload from huggingface
         LOGGER.info("Model retrieving, not finetuned, from hf...")
-        model = load_model_from_hf(cf.model_name, args.pretrained, 1)
+        model = load_model_from_hf(cf.model_name, args.pretrained)
     else: # the finetuned model has to be loaded from disk
         LOGGER.info("Model retrieving, finetuned, load from disk...")
         model = AutoModelForSequenceClassification.from_pretrained(args.model_dir, 
                                                                    ignore_mismatched_sizes=True,
-                                                                   output_attentions=False, output_hidden_states=False)
+                                                                   output_attentions=False, output_hidden_states=False,
+                                                                   num_labels=2) # number of the classes
 
     tokenized_datasets_sst2 = dataset_sst2.map(tokenize_function, batched=True,
                                                             load_from_cache_file=CACHE_DIR)

@@ -1,4 +1,7 @@
 import os
+import sys
+sys.path.append(os.path.abspath(".")) # run the scrpits file from the parent folder
+
 import argparse
 
 import torch

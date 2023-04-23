@@ -1,3 +1,7 @@
+import os
+import sys
+sys.path.append(os.path.abspath(".")) # run the scrpits file from the parent folder
+
 from gaze.dataset import GazeDataset
 from gaze.utils import Config
 from gaze.trainer import cross_validation
@@ -23,8 +27,6 @@ from transformers import (
     set_seed,
 )
 
-
-import os
 from torch.utils.tensorboard import SummaryWriter
 import argparse
 

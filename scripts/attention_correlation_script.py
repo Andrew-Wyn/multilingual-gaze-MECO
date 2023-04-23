@@ -1,6 +1,9 @@
+import os
+import sys
+sys.path.append(os.path.abspath(".")) # run the scrpits file from the parent folder
+
 import argparse
 import json
-import os
 
 from gaze.dataset import GazeDataset
 from gaze.utils import LOGGER, randomize_model, Config

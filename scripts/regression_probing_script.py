@@ -1,7 +1,8 @@
-import argparse
 import os
+import sys
+sys.path.append(os.path.abspath(".")) # run the scrpits file from the parent folder
 
-import numpy as np
+import argparse
 
 from gaze.dataset import GazeDataset
 from gaze.utils import LOGGER, Config, load_model_from_hf
